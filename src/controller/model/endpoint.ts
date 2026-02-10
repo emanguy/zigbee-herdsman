@@ -1144,16 +1144,15 @@ export class Endpoint extends ZigbeeEntity {
             optionsWithDefaults.reservedBits,
         );
 
-        let testPayload = logPayload ? logPayload : payload;
-        if ((testPayload.hasOwnProperty('colorx') && testPayload.hasOwnProperty('colory') ) ||
-            (testPayload.hasOwnProperty('enhancehue') && testPayload.hasOwnProperty('saturation') ))
-        {
-            frame.colorStreamType = 'color';
+        const testPayload = logPayload ? logPayload : payload;
+        if (
+            (Object.hasOwn(testPayload, "colorx") && Object.hasOwn(testPayload, "colory")) ||
+            (Object.hasOwn(testPayload, "enhancehue") && Object.hasOwn(testPayload, "saturation"))
+        ) {
+            frame.colorStreamType = "color";
             optionsWithDefaults.timeout = 200;
-        }
-        else if (testPayload.hasOwnProperty('level'))
-        {
-            frame.colorStreamType = 'brightness';
+        } else if (Object.hasOwn(testPayload, "level")) {
+            frame.colorStreamType = "brightness";
             optionsWithDefaults.timeout = 200;
         }
 

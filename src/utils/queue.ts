@@ -1,5 +1,4 @@
-import {resolve} from "path";
-import {ColorStreamType} from "../zspec/zcl/zclFrame";
+import type {ColorStreamType} from "../zspec/zcl/zclFrame";
 
 interface Job {
     key?: string | number;
@@ -18,7 +17,7 @@ export class Queue {
         this.#concurrent = concurrent;
     }
 
-    public async execute<T>(func: () => Promise<T>, key?: string | number, _colorStreamType? : ColorStreamType): Promise<T> {
+    public async execute<T>(func: () => Promise<T>, key?: string | number, _colorStreamType?: ColorStreamType): Promise<T> {
         const job: Job = {key, colorStreamType: _colorStreamType, cancelled: false, running: false};
         this.#jobs.push(job);
 
@@ -40,14 +39,11 @@ export class Queue {
         }
 
         try {
-            if (job.cancelled === true)
-            {
-                throw Error('Job is cancelled');
+            if (job.cancelled === true) {
+                throw new Error("Job is cancelled");
             }
-            else
-            {
-                return await func();
-            }
+
+            return await func();
         } finally {
             this.#jobs.splice(this.#jobs.indexOf(job), 1);
             this.#running = Math.max(this.#running - 1, 0);
@@ -87,21 +83,17 @@ export class Queue {
 
     public count(): number {
         let total = 0;
-        this.#jobs.forEach((element) => { if (!element.cancelled) total++});
+        this.#jobs.forEach((element) => {
+            if (!element.cancelled) total++;
+        });
         return total;
     }
 
-    public cancelOldRequest(        
-        key?: string | number,        
-        colorStreamType? : ColorStreamType,
-    ): number {
+    public cancelOldRequest(key?: string | number, colorStreamType?: ColorStreamType): number {
         let cancelled = 0;
 
         this.#jobs.forEach((element) => {
-            if (!element.running &&
-                key && element.key === key &&
-                colorStreamType && element.colorStreamType === colorStreamType)
-            {
+            if (!element.running && key && element.key === key && colorStreamType && element.colorStreamType === colorStreamType) {
                 element.cancelled = true;
                 cancelled++;
             }

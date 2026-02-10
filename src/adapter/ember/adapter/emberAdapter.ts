@@ -1938,7 +1938,8 @@ export class EmberAdapter extends Adapter {
 
         logger.debug(
             `sendZclFrameToEndpoint ${ieeeAddr}:${networkAddress}/${endpoint} ` +
-                `(${this.queue.count()}), type=${zclFrame.colorStreamType}, timeout=${timeout}`, NS,
+                `(${this.queue.count()}), type=${zclFrame.colorStreamType}, timeout=${timeout}`,
+            NS,
         );
 
         if (command.response !== undefined && disableResponse === false) {
@@ -1965,88 +1966,92 @@ export class EmberAdapter extends Adapter {
 
         const data = zclFrame.toBuffer();
 
-        if (zclFrame.colorStreamType)
-        {
+        if (zclFrame.colorStreamType) {
             logger.debug(`Cancelled frames: ${this.queue.cancelOldRequest(networkAddress, zclFrame.colorStreamType)}`, NS);
         }
 
-        return await this.queue.execute<ZclPayload | undefined>(async () => {
-            this.checkInterpanLock();
+        return await this.queue.execute<ZclPayload | undefined>(
+            async () => {
+                this.checkInterpanLock();
 
-            logger.debug(
-                () => `~~~> [ZCL to=${ieeeAddr}:${networkAddress} apsFrame=${JSON.stringify(apsFrame)} header=${JSON.stringify(zclFrame.header)}]`,
-                NS,
-            );
+                logger.debug(
+                    () =>
+                        `~~~> [ZCL to=${ieeeAddr}:${networkAddress} apsFrame=${JSON.stringify(apsFrame)} header=${JSON.stringify(zclFrame.header)}]`,
+                    NS,
+                );
 
-            for (let i = 1; i <= QUEUE_MAX_SEND_ATTEMPTS; i++) {
-                let status: SLStatus = SLStatus.FAIL;
+                for (let i = 1; i <= QUEUE_MAX_SEND_ATTEMPTS; i++) {
+                    let status: SLStatus = SLStatus.FAIL;
 
-                try {
-                    [status] = await this.ezsp.send(
-                        EmberOutgoingMessageType.DIRECT,
-                        networkAddress,
-                        apsFrame,
-                        data,
-                        0, // alias
-                        0, // alias seq
-                    );
-                } catch (error) {
-                    if (error instanceof EzspError) {
-                        switch (error.code) {
-                            case EzspStatus.NO_TX_SPACE: {
-                                status = SLStatus.BUSY;
-                                break;
-                            }
-                            case EzspStatus.NOT_CONNECTED: {
-                                status = SLStatus.NETWORK_DOWN;
-                                break;
+                    try {
+                        [status] = await this.ezsp.send(
+                            EmberOutgoingMessageType.DIRECT,
+                            networkAddress,
+                            apsFrame,
+                            data,
+                            0, // alias
+                            0, // alias seq
+                        );
+                    } catch (error) {
+                        if (error instanceof EzspError) {
+                            switch (error.code) {
+                                case EzspStatus.NO_TX_SPACE: {
+                                    status = SLStatus.BUSY;
+                                    break;
+                                }
+                                case EzspStatus.NOT_CONNECTED: {
+                                    status = SLStatus.NETWORK_DOWN;
+                                    break;
+                                }
                             }
                         }
                     }
-                }
 
-                // `else if` order matters
-                if (status === SLStatus.OK) {
-                    break;
-                }
+                    // `else if` order matters
+                    if (status === SLStatus.OK) {
+                        break;
+                    }
 
-                if (disableRecovery || i === QUEUE_MAX_SEND_ATTEMPTS) {
-                    throw new Error(
-                        `~x~> [ZCL to=${ieeeAddr}:${networkAddress} apsFrame=${JSON.stringify(apsFrame)}] Failed to send request with status=${SLStatus[status]}.`,
+                    if (disableRecovery || i === QUEUE_MAX_SEND_ATTEMPTS) {
+                        throw new Error(
+                            `~x~> [ZCL to=${ieeeAddr}:${networkAddress} apsFrame=${JSON.stringify(apsFrame)}] Failed to send request with status=${SLStatus[status]}.`,
+                        );
+                    }
+
+                    if (status === SLStatus.ZIGBEE_MAX_MESSAGE_LIMIT_REACHED || status === SLStatus.BUSY) {
+                        await wait(QUEUE_BUSY_DEFER_MSEC);
+                    } else if (status === SLStatus.NETWORK_DOWN) {
+                        await wait(QUEUE_NETWORK_DOWN_DEFER_MSEC);
+                    } else {
+                        throw new Error(
+                            `~x~> [ZCL to=${ieeeAddr}:${networkAddress} apsFrame=${JSON.stringify(apsFrame)}] Failed to send request with status=${SLStatus[status]}.`,
+                        );
+                    }
+
+                    logger.debug(
+                        `~x~> [ZCL to=${ieeeAddr}:${networkAddress}] Failed to send request attempt ${i}/${QUEUE_MAX_SEND_ATTEMPTS} with status=${SLStatus[status]}.`,
+                        NS,
                     );
                 }
 
-                if (status === SLStatus.ZIGBEE_MAX_MESSAGE_LIMIT_REACHED || status === SLStatus.BUSY) {
-                    await wait(QUEUE_BUSY_DEFER_MSEC);
-                } else if (status === SLStatus.NETWORK_DOWN) {
-                    await wait(QUEUE_NETWORK_DOWN_DEFER_MSEC);
-                } else {
-                    throw new Error(
-                        `~x~> [ZCL to=${ieeeAddr}:${networkAddress} apsFrame=${JSON.stringify(apsFrame)}] Failed to send request with status=${SLStatus[status]}.`,
+                if (commandResponseId !== undefined) {
+                    // NOTE: aps sequence number will have been set by send function
+                    const result = await this.oneWaitress.startWaitingFor<ZclPayload>(
+                        {
+                            target: networkAddress,
+                            apsFrame,
+                            zclSequence: zclFrame.header.transactionSequenceNumber,
+                            commandIdentifier: commandResponseId,
+                        },
+                        timeout,
                     );
+
+                    return result;
                 }
-
-                logger.debug(
-                    `~x~> [ZCL to=${ieeeAddr}:${networkAddress}] Failed to send request attempt ${i}/${QUEUE_MAX_SEND_ATTEMPTS} with status=${SLStatus[status]}.`,
-                    NS,
-                );
-            }
-
-            if (commandResponseId !== undefined) {
-                // NOTE: aps sequence number will have been set by send function
-                const result = await this.oneWaitress.startWaitingFor<ZclPayload>(
-                    {
-                        target: networkAddress,
-                        apsFrame,
-                        zclSequence: zclFrame.header.transactionSequenceNumber,
-                        commandIdentifier: commandResponseId,
-                    },
-                    timeout,
-                );
-
-                return result;
-            }
-        }, networkAddress, zclFrame.colorStreamType);
+            },
+            networkAddress,
+            zclFrame.colorStreamType,
+        );
     }
 
     // queued, non-InterPAN
