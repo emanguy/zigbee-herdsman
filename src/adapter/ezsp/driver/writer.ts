@@ -1,20 +1,20 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import * as stream from 'stream';
+import * as stream from "node:stream";
 
-import {logger} from '../../../utils/logger';
-import * as consts from './consts';
-import {crc16ccitt} from './utils';
+import {logger} from "../../../utils/logger";
+import * as consts from "./consts";
+import {crc16ccitt} from "./utils";
 
-const NS = 'zh:ezsp:uart';
+const NS = "zh:ezsp:uart";
 
 export class Writer extends stream.Readable {
     public writeBuffer(buffer: Buffer): void {
-        logger.debug(`--> [${buffer.toString('hex')}]`, NS);
+        logger.debug(`--> [${buffer.toString("hex")}]`, NS);
         this.push(buffer);
     }
 
-    public _read(): void {}
+    public override _read(): void {}
 
     public sendACK(ackNum: number): void {
         /* Construct a acknowledgement frame */

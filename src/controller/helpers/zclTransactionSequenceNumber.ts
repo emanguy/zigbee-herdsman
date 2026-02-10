@@ -1,15 +1,15 @@
 class ZclTransactionSequenceNumber {
-    private static number = 1;
+    private sequence = -1;
 
-    public static next(): number {
-        this.number++;
+    get current() {
+        return this.sequence;
+    }
 
-        if (this.number > 255) {
-            this.number = 1;
-        }
+    public next(): number {
+        this.sequence = (this.sequence + 1) % 256;
 
-        return this.number;
+        return this.sequence;
     }
 }
 
-export default ZclTransactionSequenceNumber;
+export default new ZclTransactionSequenceNumber();

@@ -1,28 +1,21 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import assert from 'assert';
+import assert from "node:assert";
+import type {Backup} from "../../../models";
+import {Queue, Waitress} from "../../../utils";
+import {logger} from "../../../utils/logger";
+import * as ZSpec from "../../../zspec";
+import * as Zcl from "../../../zspec/zcl";
+import * as Zdo from "../../../zspec/zdo";
+import type * as ZdoTypes from "../../../zspec/zdo/definition/tstypes";
+import {Adapter, type TsType} from "../..";
+import {WORKAROUND_JOIN_MANUF_IEEE_PREFIX_TO_CODE} from "../../const";
+import type {ZclPayload} from "../../events";
+import {ZBOSSDriver} from "../driver";
+import {CommandId, DeviceUpdateStatus} from "../enums";
+import {FrameType, type ZBOSSFrame} from "../frame";
 
-import {Adapter, TsType} from '../..';
-import {Backup} from '../../../models';
-import {Queue, RealpathSync, Waitress} from '../../../utils';
-import {logger} from '../../../utils/logger';
-import * as ZSpec from '../../../zspec';
-import * as Zcl from '../../../zspec/zcl';
-import * as Zdo from '../../../zspec/zdo';
-import * as ZdoTypes from '../../../zspec/zdo/definition/tstypes';
-import {ZclPayload} from '../../events';
-import SerialPortUtils from '../../serialPortUtils';
-import SocketPortUtils from '../../socketPortUtils';
-import {ZBOSSDriver} from '../driver';
-import {CommandId, DeviceUpdateStatus} from '../enums';
-import {FrameType, ZBOSSFrame} from '../frame';
-
-const NS = 'zh:zboss';
-
-const autoDetectDefinitions = [
-    // Nordic Zigbee NCP
-    {manufacturer: 'ZEPHYR', vendorId: '2fe3', productId: '0100'},
-];
+const NS = "zh:zboss";
 
 interface WaitressMatcher {
     address: number | string;
@@ -36,6 +29,7 @@ export class ZBOSSAdapter extends Adapter {
     private queue: Queue;
     private readonly driver: ZBOSSDriver;
     private waitress: Waitress<ZclPayload, WaitressMatcher>;
+    private currentManufacturerCode: Zcl.ManufacturerCode;
 
     constructor(
         networkOptions: TsType.NetworkOptions,
@@ -46,33 +40,45 @@ export class ZBOSSAdapter extends Adapter {
         super(networkOptions, serialPortOptions, backupPath, adapterOptions);
         this.hasZdoMessageOverhead = false;
         this.manufacturerID = Zcl.ManufacturerCode.NORDIC_SEMICONDUCTOR_ASA;
-        const concurrent = adapterOptions && adapterOptions.concurrent ? adapterOptions.concurrent : 8;
+        this.currentManufacturerCode = Zcl.ManufacturerCode.NORDIC_SEMICONDUCTOR_ASA;
+        const concurrent = adapterOptions?.concurrent ? adapterOptions.concurrent : 8;
         logger.debug(`Adapter concurrent: ${concurrent}`, NS);
         this.queue = new Queue(concurrent);
 
         this.waitress = new Waitress<ZclPayload, WaitressMatcher>(this.waitressValidator, this.waitressTimeoutFormatter);
         this.driver = new ZBOSSDriver(serialPortOptions, networkOptions);
-        this.driver.on('frame', this.processMessage.bind(this));
+        this.driver.on("frame", this.processMessage.bind(this));
     }
 
     private async processMessage(frame: ZBOSSFrame): Promise<void> {
         logger.debug(() => `processMessage: ${JSON.stringify(frame)}`, NS);
 
         if (frame.payload.zdoClusterId !== undefined) {
-            this.emit('zdoResponse', frame.payload.zdoClusterId, frame.payload.zdo!);
-        } else if (frame.type == FrameType.INDICATION) {
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+            this.emit("zdoResponse", frame.payload.zdoClusterId, frame.payload.zdo!);
+        } else if (frame.type === FrameType.INDICATION) {
             switch (frame.commandId) {
                 case CommandId.ZDO_DEV_UPDATE_IND: {
                     logger.debug(`Device ${frame.payload.ieee}:${frame.payload.nwk} ${DeviceUpdateStatus[frame.payload.status]}.`, NS);
 
                     if (frame.payload.status === DeviceUpdateStatus.LEFT) {
-                        this.emit('deviceLeave', {
+                        this.emit("deviceLeave", {
                             networkAddress: frame.payload.nwk,
                             ieeeAddr: frame.payload.ieee,
                         });
                     } else {
+                        // set workaround manuf code if necessary, or revert to default if previous joined device required workaround and new one does not
+                        const joinManufCode = WORKAROUND_JOIN_MANUF_IEEE_PREFIX_TO_CODE[frame.payload.ieee.substring(0, 8)] ?? this.manufacturerID;
+
+                        if (this.currentManufacturerCode !== joinManufCode) {
+                            logger.debug(`[WORKAROUND] Setting coordinator manufacturer code to ${Zcl.ManufacturerCode[joinManufCode]}.`, NS);
+
+                            await this.driver.execCommand(CommandId.ZDO_SET_NODE_DESC_MANUF_CODE, {manufacturerCode: joinManufCode});
+
+                            this.currentManufacturerCode = joinManufCode;
+                        }
                         // SECURE_REJOIN, UNSECURE_JOIN, TC_REJOIN
-                        this.emit('deviceJoined', {
+                        this.emit("deviceJoined", {
                             networkAddress: frame.payload.nwk,
                             ieeeAddr: frame.payload.ieee,
                         });
@@ -81,7 +87,7 @@ export class ZBOSSAdapter extends Adapter {
                 }
 
                 case CommandId.NWK_LEAVE_IND: {
-                    this.emit('deviceLeave', {
+                    this.emit("deviceLeave", {
                         networkAddress: frame.payload.nwk,
                         ieeeAddr: frame.payload.ieee,
                     });
@@ -102,49 +108,29 @@ export class ZBOSSAdapter extends Adapter {
                     };
 
                     this.waitress.resolve(payload);
-                    this.emit('zclPayload', payload);
+                    this.emit("zclPayload", payload);
                     break;
                 }
             }
         }
     }
 
-    public static async isValidPath(path: string): Promise<boolean> {
-        // For TCP paths we cannot get device information, therefore we cannot validate it.
-        if (SocketPortUtils.isTcpPath(path)) {
-            return false;
-        }
-
-        try {
-            return await SerialPortUtils.is(RealpathSync(path), autoDetectDefinitions);
-        } catch (error) {
-            logger.debug(`Failed to determine if path is valid: '${error}'`, NS);
-            return false;
-        }
-    }
-
-    public static async autoDetectPath(): Promise<string | null> {
-        const paths = await SerialPortUtils.find(autoDetectDefinitions);
-        paths.sort((a, b) => (a < b ? -1 : 1));
-        return paths.length > 0 ? paths[0] : null;
-    }
-
     public async start(): Promise<TsType.StartResult> {
-        logger.info(`ZBOSS Adapter starting`, NS);
+        logger.info("ZBOSS Adapter starting", NS);
 
         await this.driver.connect();
 
-        return await this.driver.startup();
+        return await this.driver.startup(this.adapterOptions.transmitPower);
     }
 
     public async stop(): Promise<void> {
         await this.driver.stop();
 
-        logger.info(`ZBOSS Adapter stopped`, NS);
+        logger.info("ZBOSS Adapter stopped", NS);
     }
 
     public async getCoordinatorIEEE(): Promise<string> {
-        return this.driver.netInfo.ieeeAddr;
+        return await Promise.resolve(this.driver.netInfo.ieeeAddr);
     }
 
     public async getCoordinatorVersion(): Promise<TsType.CoordinatorVersion> {
@@ -160,7 +146,7 @@ export class ZBOSSAdapter extends Adapter {
             };
 
             return {
-                type: `zboss`,
+                type: "zboss",
                 meta: {
                     coordinator: cver.payload.version,
                     stack: ver2str(ver.payload.stackVersion),
@@ -171,48 +157,51 @@ export class ZBOSSAdapter extends Adapter {
         });
     }
 
-    public async reset(type: 'soft' | 'hard'): Promise<void> {
-        throw new Error(`This adapter does not reset '${type}'`);
+    public async reset(type: "soft" | "hard"): Promise<void> {
+        await Promise.reject(new Error(`This adapter does not reset '${type}'`));
     }
 
     public async supportsBackup(): Promise<boolean> {
-        return false;
+        return await Promise.resolve(false);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    public async backup(ieeeAddressesInDatabase: string[]): Promise<Backup> {
-        throw new Error('This adapter does not support backup');
+    public async backup(_ieeeAddressesInDatabase: string[]): Promise<Backup> {
+        return await Promise.reject(new Error("This adapter does not support backup"));
     }
 
     public async getNetworkParameters(): Promise<TsType.NetworkParameters> {
-        return await this.queue.execute<TsType.NetworkParameters>(async () => {
+        return await this.queue.execute(async () => {
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             const channel = this.driver.netInfo!.network.channel;
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             const panID = this.driver.netInfo!.network.panID!;
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             const extendedPanID = this.driver.netInfo!.network.extendedPanID;
 
-            return {
+            return await Promise.resolve({
                 panID,
-                extendedPanID: parseInt(Buffer.from(extendedPanID).toString('hex'), 16),
+                extendedPanID: ZSpec.Utils.eui64LEBufferToHex(Buffer.from(extendedPanID)),
                 channel,
-            };
+                nwkUpdateID: 0,
+            });
         });
     }
 
-    public async setTransmitPower(value: number): Promise<void> {
-        if (this.driver.isInitialized()) {
-            return await this.queue.execute<void>(async () => {
-                await this.driver.execCommand(CommandId.SET_TX_POWER, {txPower: value});
-            });
-        }
-    }
-
-    public async addInstallCode(ieeeAddress: string, key: Buffer): Promise<void> {
-        logger.error(() => `NOT SUPPORTED: sendZclFrameToGroup(${ieeeAddress},${key.toString('hex')}`, NS);
-        throw new Error(`Install code is not supported for 'zboss' yet`);
+    public async addInstallCode(ieeeAddress: string, key: Buffer, hashed: boolean): Promise<void> {
+        logger.error(`NOT SUPPORTED: sendZclFrameToGroup(${ieeeAddress},${key.toString("hex")},${hashed}`, NS);
+        await Promise.reject(new Error(`Install code is not supported for 'zboss' yet`));
     }
 
     public async permitJoin(seconds: number, networkAddress?: number): Promise<void> {
         if (this.driver.isInitialized()) {
+            if (this.currentManufacturerCode !== this.manufacturerID) {
+                logger.debug(`[WORKAROUND] Resetting coordinator manufacturer code to ${Zcl.ManufacturerCode[this.manufacturerID]}.`, NS);
+
+                await this.driver.execCommand(CommandId.ZDO_SET_NODE_DESC_MANUF_CODE, {manufacturerCode: this.manufacturerID});
+
+                this.currentManufacturerCode = this.manufacturerID;
+            }
+
             const clusterId = Zdo.ClusterId.PERMIT_JOINING_REQUEST;
             // `authentication`: TC significance always 1 (zb specs)
             const zdoPayload = Zdo.Buffalo.buildRequest(this.hasZdoMessageOverhead, clusterId, seconds, 1, []);
@@ -221,8 +210,7 @@ export class ZBOSSAdapter extends Adapter {
                 // `device-only`
                 const result = await this.sendZdo(ZSpec.BLANK_EUI64, networkAddress, clusterId, zdoPayload, false);
 
-                /* istanbul ignore next */
-                if (!Zdo.Buffalo.checkStatus(result)) {
+                if (!Zdo.Buffalo.checkStatus<Zdo.ClusterId.PERMIT_JOINING_RESPONSE>(result)) {
                     // TODO: will disappear once moved upstream
                     throw new Zdo.StatusError(result[0]);
                 }
@@ -230,8 +218,7 @@ export class ZBOSSAdapter extends Adapter {
                 // `coordinator-only` (for `all` too)
                 const result = await this.sendZdo(ZSpec.BLANK_EUI64, ZSpec.COORDINATOR_ADDRESS, clusterId, zdoPayload, false);
 
-                /* istanbul ignore next */
-                if (!Zdo.Buffalo.checkStatus(result)) {
+                if (!Zdo.Buffalo.checkStatus<Zdo.ClusterId.PERMIT_JOINING_RESPONSE>(result)) {
                     // TODO: will disappear once moved upstream
                     throw new Zdo.StatusError(result[0]);
                 }
@@ -259,12 +246,12 @@ export class ZBOSSAdapter extends Adapter {
         disableResponse: false,
     ): Promise<ZdoTypes.RequestToResponseMap[K]>;
     public async sendZdo<K extends keyof ZdoTypes.RequestToResponseMap>(
-        ieeeAddress: string,
+        _ieeeAddress: string,
         networkAddress: number,
         clusterId: K,
         payload: Buffer,
         disableResponse: boolean,
-    ): Promise<ZdoTypes.RequestToResponseMap[K] | void> {
+    ): Promise<ZdoTypes.RequestToResponseMap[K] | undefined> {
         return await this.queue.execute(async () => {
             // stack-specific requirements
             switch (clusterId) {
@@ -290,7 +277,7 @@ export class ZBOSSAdapter extends Adapter {
                 case Zdo.ClusterId.UNBIND_REQUEST: {
                     // use fixed size address
                     const addrType = payload.readUInt8(13); // address type
-                    if (addrType == Zdo.MULTICAST_BINDING) {
+                    if (addrType === Zdo.MULTICAST_BINDING) {
                         payload = Buffer.concat([payload, Buffer.alloc(7)]);
                     }
                     break;
@@ -317,8 +304,9 @@ export class ZBOSSAdapter extends Adapter {
         disableResponse: boolean,
         disableRecovery: boolean,
         sourceEndpoint?: number,
-    ): Promise<ZclPayload | void> {
-        return await this.queue.execute<ZclPayload | void>(async () => {
+        profileId?: number,
+    ): Promise<ZclPayload | undefined> {
+        return await this.queue.execute<ZclPayload | undefined>(async () => {
             return await this.sendZclFrameToEndpointInternal(
                 ieeeAddr,
                 networkAddress,
@@ -334,6 +322,7 @@ export class ZBOSSAdapter extends Adapter {
                 false,
                 false,
                 null,
+                profileId,
             );
         }, networkAddress);
     }
@@ -353,7 +342,8 @@ export class ZBOSSAdapter extends Adapter {
         discoveredRoute: boolean,
         assocRemove: boolean,
         assocRestore: {ieeeadr: string; nwkaddr: number; noderelation: number} | null,
-    ): Promise<ZclPayload | void> {
+        profileId?: number,
+    ): Promise<ZclPayload | undefined> {
         if (ieeeAddr == null) {
             ieeeAddr = this.driver.netInfo.ieeeAddr;
         }
@@ -370,6 +360,7 @@ export class ZBOSSAdapter extends Adapter {
                 endpoint,
                 zclFrame.header.transactionSequenceNumber,
                 zclFrame.cluster.ID,
+                // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
                 command.response!,
                 timeout,
             );
@@ -386,7 +377,7 @@ export class ZBOSSAdapter extends Adapter {
         try {
             const dataConfirmResult = await this.driver.request(
                 ieeeAddr,
-                0x0104,
+                profileId ?? 0x0104,
                 zclFrame.cluster.ID,
                 endpoint,
                 sourceEndpoint || 0x01,
@@ -396,7 +387,7 @@ export class ZBOSSAdapter extends Adapter {
                 if (response != null) {
                     response.cancel();
                 }
-                throw Error('sendZclFrameToEndpointInternal error');
+                throw new Error("sendZclFrameToEndpointInternal error");
             }
             if (response !== null) {
                 try {
@@ -420,10 +411,11 @@ export class ZBOSSAdapter extends Adapter {
                             discoveredRoute,
                             assocRemove,
                             assocRestore,
+                            profileId,
                         );
-                    } else {
-                        throw error;
                     }
+
+                    throw error;
                 }
             } else {
                 return;
@@ -436,10 +428,10 @@ export class ZBOSSAdapter extends Adapter {
         }
     }
 
-    public async sendZclFrameToGroup(groupID: number, zclFrame: Zcl.Frame, sourceEndpoint?: number): Promise<void> {
+    public async sendZclFrameToGroup(groupID: number, zclFrame: Zcl.Frame, sourceEndpoint?: number, profileId?: number): Promise<void> {
         await this.driver.grequest(
             groupID,
-            sourceEndpoint === ZSpec.GP_ENDPOINT ? ZSpec.GP_PROFILE_ID : ZSpec.HA_PROFILE_ID,
+            profileId ?? (sourceEndpoint === ZSpec.GP_ENDPOINT ? ZSpec.GP_PROFILE_ID : ZSpec.HA_PROFILE_ID),
             zclFrame.cluster.ID,
             sourceEndpoint || 0x01,
             zclFrame.toBuffer(),
@@ -451,10 +443,11 @@ export class ZBOSSAdapter extends Adapter {
         zclFrame: Zcl.Frame,
         sourceEndpoint: number,
         destination: ZSpec.BroadcastAddress,
+        profileId?: number,
     ): Promise<void> {
         await this.driver.brequest(
             destination,
-            sourceEndpoint === ZSpec.GP_ENDPOINT && endpoint === ZSpec.GP_ENDPOINT ? ZSpec.GP_PROFILE_ID : ZSpec.HA_PROFILE_ID,
+            profileId ?? (sourceEndpoint === ZSpec.GP_ENDPOINT && endpoint === ZSpec.GP_ENDPOINT ? ZSpec.GP_PROFILE_ID : ZSpec.HA_PROFILE_ID),
             zclFrame.cluster.ID,
             endpoint,
             sourceEndpoint || 0x01,
@@ -463,22 +456,24 @@ export class ZBOSSAdapter extends Adapter {
     }
 
     public async setChannelInterPAN(channel: number): Promise<void> {
-        logger.error(`NOT SUPPORTED: setChannelInterPAN(${channel})`, NS);
-        return;
+        await Promise.reject(new Error(`NOT SUPPORTED: setChannelInterPAN(${channel})`));
     }
 
     public async sendZclFrameInterPANToIeeeAddr(zclFrame: Zcl.Frame, ieeeAddress: string): Promise<void> {
-        logger.error(() => `NOT SUPPORTED: sendZclFrameInterPANToIeeeAddr(${JSON.stringify(zclFrame)},${ieeeAddress})`, NS);
+        await Promise.reject(new Error(`NOT SUPPORTED: sendZclFrameInterPANToIeeeAddr(${JSON.stringify(zclFrame)},${ieeeAddress})`));
         return;
     }
 
-    public async sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number): Promise<ZclPayload> {
-        logger.error(() => `NOT SUPPORTED: sendZclFrameInterPANBroadcast(${JSON.stringify(zclFrame)},${timeout})`, NS);
-        throw new Error(`Is not supported for 'zboss' yet`);
+    public async sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number, disableResponse: false): Promise<ZclPayload>;
+    public async sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number, disableResponse: true): Promise<undefined>;
+    public async sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number, disableResponse: boolean): Promise<ZclPayload | undefined> {
+        return await Promise.reject(
+            new Error(`NOT SUPPORTED: sendZclFrameInterPANBroadcast(${JSON.stringify(zclFrame)},${timeout},${disableResponse})`),
+        );
     }
 
     public async restoreChannelInterPAN(): Promise<void> {
-        return;
+        await Promise.reject(new Error("NOT SUPPORTED: restoreChannelInterPAN()"));
     }
 
     private waitForInternal(
@@ -506,8 +501,8 @@ export class ZBOSSAdapter extends Adapter {
     public waitFor(
         networkAddress: number,
         endpoint: number,
-        frameType: Zcl.FrameType,
-        direction: Zcl.Direction,
+        _frameType: Zcl.FrameType,
+        _direction: Zcl.Direction,
         transactionSequenceNumber: number | undefined,
         clusterID: number,
         commandIdentifier: number,
@@ -531,7 +526,7 @@ export class ZBOSSAdapter extends Adapter {
             (payload.header &&
                 (!matcher.address || payload.address === matcher.address) &&
                 payload.endpoint === matcher.endpoint &&
-                (!matcher.transactionSequenceNumber || payload.header.transactionSequenceNumber === matcher.transactionSequenceNumber) &&
+                (matcher.transactionSequenceNumber === undefined || payload.header.transactionSequenceNumber === matcher.transactionSequenceNumber) &&
                 payload.clusterID === matcher.clusterID &&
                 matcher.commandIdentifier === payload.header.commandIdentifier) ||
             false

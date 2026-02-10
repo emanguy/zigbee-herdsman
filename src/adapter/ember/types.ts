@@ -1,5 +1,5 @@
-import {EUI64, ExtendedPanId, NodeId, PanId} from '../../zspec/tstypes';
-import {
+import type {Eui64, ExtendedPanId, NodeId, PanId} from "../../zspec/tstypes";
+import type {
     EmberApsOption,
     EmberBindingType,
     EmberCurrentSecurityBitmask,
@@ -17,9 +17,9 @@ import {
     SecManDerivedKeyType,
     SecManFlag,
     SecManKeyType,
-} from './enums';
+} from "./enums";
 
-/** 16-bit ZigBee multicast group identifier. uint16_t */
+/** 16-bit Zigbee multicast group identifier. uint16_t */
 export type EmberMulticastId = number;
 /**
  * The percent of duty cycle for a limit.
@@ -68,7 +68,7 @@ export type EmberVersion = {
     patch: number;
     /**
      * Special version number
-     * (used to indicate superficial changes that don't require re-certification of the stack as a ZigBee-Compliant Platform,
+     * (used to indicate superficial changes that don't require re-certification of the stack as a Zigbee-Compliant Platform,
      * such as changes that only affect installer packaging, documentation, or comments in the code)
      *
      * a.b.c.D
@@ -104,7 +104,7 @@ export type EmberNetworkParameters = {
     radioChannel: number;
     /**
      * Join method: The protocol messages used to establish an initial parent.
-     * It is ignored when forming a ZigBee network, or when querying the stack for its network parameters.
+     * It is ignored when forming a Zigbee network, or when querying the stack for its network parameters.
      */
     joinMethod: EmberJoinMethod;
     /**
@@ -113,7 +113,7 @@ export type EmberNetworkParameters = {
      */
     nwkManagerId: NodeId;
     /**
-     * An NWK Update ID.  The value of the ZigBee nwkUpdateId known by the stack.
+     * An NWK Update ID.  The value of the Zigbee nwkUpdateId known by the stack.
      * It is used to determine the newest instance of the network after a PAN
      * ID or channel change.  This may only be set at joining when using
      * EMBER_USE_CONFIGURED_NWK_STATE as the join method.
@@ -149,7 +149,7 @@ export type EmberBeaconData = {
     parentPriority: number;
     /** uint8_t */
     supportedKeyNegotiationMethods: number;
-    extended_beacon: boolean;
+    extendedBeacon: boolean;
     /** Enhanced or regular beacon. default true */
     enhanced: boolean;
     /** default true */
@@ -187,7 +187,7 @@ export type EmberMultiPhyRadioParameters = {
 /** This structure contains information about child nodes. */
 export type EmberChildData = {
     /**  */
-    eui64: EUI64;
+    eui64: Eui64;
     /**  */
     type: EmberNodeType;
     /**  */
@@ -238,7 +238,7 @@ export type EmberNeighborTableEntry = {
      * */
     age: number;
     /** The 8 byte EUI64 of the neighbor. */
-    longId: EUI64;
+    longId: Eui64;
 };
 
 /**
@@ -325,12 +325,12 @@ export type EmberBindingTableEntry = {
      * - The destination EUI64, for unicasts.
      * - A 16-bit multicast group address, for multicasts.
      */
-    identifier: EUI64;
+    identifier: Eui64;
     /** The index of the network the binding belongs to. uint8_t */
     networkIndex: number;
 };
 
-/** An in-memory representation of a ZigBee APS frame of an incoming or outgoing message. */
+/** An in-memory representation of a Zigbee APS frame of an incoming or outgoing message. */
 export type EmberApsFrame = {
     /** The application profile ID that describes the format of the message. uint16_t */
     profileId: number;
@@ -416,7 +416,7 @@ export type EmberInitialSecurityState = {
      * This field must be set when using commissioning mode.
      * It is required to be in little-endian format.
      */
-    preconfiguredTrustCenterEui64: EUI64;
+    preconfiguredTrustCenterEui64: Eui64;
 };
 
 /** This describes the security features used by the stack for a joined device. */
@@ -427,7 +427,7 @@ export type EmberCurrentSecurityState = {
      * This indicates the EUI64 of the Trust Center.
      * It will be all zeroes if the Trust Center Address is not known (i.e., the device is in a Distributed Trust Center network).
      */
-    trustCenterLongAddress: EUI64;
+    trustCenterLongAddress: Eui64;
 };
 
 /**
@@ -440,7 +440,7 @@ export type SecManContext = {
     /** uint8_t */
     keyIndex: number;
     derivedType: SecManDerivedKeyType;
-    eui64: EUI64;
+    eui64: Eui64;
     /** uint8_t */
     multiNetworkIndex: number;
     flags: SecManFlag;
@@ -551,7 +551,7 @@ export type EmberPrivateKeyData = {
     contents: Buffer;
 };
 
-/** Defines a ZigBee network and the associated parameters. */
+/** Defines a Zigbee network and the associated parameters. */
 export type EmberZigbeeNetwork = {
     /** uint16_t */
     panId: PanId;
@@ -581,7 +581,7 @@ export type EmberZllSecurityAlgorithmData = {
 export type EmberZllNetwork = {
     zigbeeNetwork: EmberZigbeeNetwork;
     securityAlgorithm: EmberZllSecurityAlgorithmData;
-    eui64: EUI64;
+    eui64: Eui64;
     nodeId: NodeId;
     state: EmberZllState;
     nodeType: EmberNodeType;
@@ -593,7 +593,7 @@ export type EmberZllNetwork = {
     rssiCorrection: number;
 };
 
-/** Describe the Initial Security features and requirements that will be used when forming or joining ZigBee Light Link networks. */
+/** Describe the Initial Security features and requirements that will be used when forming or joining Zigbee Light Link networks. */
 export type EmberZllInitialSecurityState = {
     /** This bitmask is unused.  All values are reserved for future use. uint32_t */
     bitmask: number;
@@ -601,13 +601,13 @@ export type EmberZllInitialSecurityState = {
     keyIndex: EmberZllKeyIndex;
     /** The encryption key for use by algorithms that require it. */
     encryptionKey: EmberKeyData;
-    /** The pre-configured link key used during classical ZigBee commissioning. */
+    /** The pre-configured link key used during classical Zigbee commissioning. */
     preconfiguredKey: EmberKeyData;
 };
 
 /** Information discovered during a ZLL scan about the ZLL device's endpoint information. */
 export type EmberZllDeviceInfoRecord = {
-    ieeeAddress: EUI64;
+    ieeeAddress: Eui64;
     /** uint8_t */
     endpointId: number;
     /** uint16_t */
@@ -677,7 +677,7 @@ export type EmberGpAddress =
       }
     | {
           /** The IEEE address is used when the application identifier is ::EMBER_GP_APPLICATION_IEEE_ADDRESS. */
-          gpdIeeeAddress: EUI64;
+          gpdIeeeAddress: Eui64;
           /** Application identifier of the GPD. */
           applicationId: EmberGpApplicationId.IEEE_ADDRESS;
           /** Application endpoint, only used when application identifier is ::EMBER_GP_APPLICATION_IEEE_ADDRESS. uint8_t */
@@ -714,7 +714,7 @@ export type EmberGpProxyTableEntry = {
 /** GP Sink Address. */
 export type EmberGpSinkAddress = {
     /** EUI64 or long address of the sink */
-    sinkEUI: EUI64;
+    sinkEUI: Eui64;
     /** Node ID or network address of the sink */
     sinkNodeId: NodeId;
 };
@@ -789,9 +789,9 @@ export type EmberTokenData = {
 };
 
 /**
- * Endpoint information (a ZigBee Simple Descriptor).
+ * Endpoint information (a Zigbee Simple Descriptor).
  *
- * This is a ZigBee Simple Descriptor and contains information about an endpoint.
+ * This is a Zigbee Simple Descriptor and contains information about an endpoint.
  * This information is shared with other nodes in the network by the ZDO.
  */
 export type EmberEndpointDescription = {
@@ -807,11 +807,26 @@ export type EmberEndpointDescription = {
     outputClusterCount: number;
 };
 
+/** @deprecated removed in EZSP v16 in favor of @see Ember802154RadioPriorities */
 export type EmberMultiprotocolPriorities = {
     /** The priority of a Zigbee RX operation while not receiving a packet. uint8_t */
     backgroundRx: number;
     /** The priority of a Zigbee TX operation. uint8_t */
     tx: number;
+    /** The priority of a Zigbee RX operation while receiving a packet. uint8_t */
+    activeRx: number;
+};
+
+/** Struct used to specify priorities for Zigbee radio operations */
+export type Ember802154RadioPriorities = {
+    /** The priority of a Zigbee RX operation while not receiving a packet. uint8_t */
+    backgroundRx: number;
+    /** Starting priority of a Zigbee TX operation. The first transmit of the packet, before retries, uses this priority. uint8_t */
+    minTxPriority: number;
+    /** The increase in TX priority (which is a decrement in value) for each retry. uint8_t */
+    txStep: number;
+    /** Maximum priority of a Zigbee TX operation. Retried messages have priorities bumped by tx_step, up to a maximum of max_tx_priority. uint8_t */
+    maxTxPriority: number;
     /** The priority of a Zigbee RX operation while receiving a packet. uint8_t */
     activeRx: number;
 };
@@ -829,7 +844,7 @@ export type EmberRxPacketInfo = {
      * the EUI64 is present in the message.
      * Also, when not set, the sender long ID is set to all zeros
      */
-    senderLongId: EUI64;
+    senderLongId: Eui64;
     /**
      * The index of the entry in the binding table that matches the sender of the message or 0xFF if there is no matching entry.
      * A binding matches the message if:

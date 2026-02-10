@@ -1,4 +1,15 @@
-interface NetworkOptions {
+export type Adapter = "deconz" | "ember" | "zstack" | "zboss" | "zigate" | "ezsp" | "zoh";
+export type DiscoverableUsbAdapter = "deconz" | "ember" | "zstack" | "zboss" | "zigate";
+
+export type UsbAdapterFingerprint = {
+    vendorId: string;
+    productId: string;
+    manufacturer?: string;
+    pathRegex: string;
+    options?: Pick<SerialPortOptions, "baudRate" | "rtscts">;
+};
+
+export interface NetworkOptions {
     panID: number;
     extendedPanID?: number[];
     channelList: number[];
@@ -6,14 +17,14 @@ interface NetworkOptions {
     networkKeyDistribute?: boolean;
 }
 
-interface SerialPortOptions {
+export interface SerialPortOptions {
     baudRate?: number;
     rtscts?: boolean;
     path?: string;
-    adapter?: 'zstack' | 'deconz' | 'zigate' | 'ezsp' | 'ember' | 'zboss' | 'auto';
+    adapter?: Adapter;
 }
 
-interface AdapterOptions {
+export interface AdapterOptions {
     concurrent?: number;
     delay?: number;
     disableLED: boolean;
@@ -21,62 +32,26 @@ interface AdapterOptions {
     forceStartWithInconsistentAdapterConfiguration?: boolean;
 }
 
-interface CoordinatorVersion {
+export interface CoordinatorVersion {
     type: string;
     meta: {[s: string]: number | string};
 }
 
-type DeviceType = 'Coordinator' | 'EndDevice' | 'Router' | 'Unknown';
+export type DeviceType = "Coordinator" | "EndDevice" | "Router" | "Unknown";
 
-type StartResult = 'resumed' | 'reset' | 'restored';
+export type StartResult = "resumed" | "reset" | "restored";
 
-interface LQINeighbor {
-    ieeeAddr: string;
-    networkAddress: number;
-    linkquality: number;
-    relationship: number;
-    depth: number;
-}
-
-interface LQI {
-    neighbors: LQINeighbor[];
-}
-
-interface RoutingTableEntry {
-    destinationAddress: number;
-    status: string;
-    nextHop: number;
-}
-
-interface RoutingTable {
-    table: RoutingTableEntry[];
-}
-
-interface Backup {
-    adapterType: 'zStack';
+export interface Backup {
+    adapterType: "zStack";
     time: string;
     meta: {[s: string]: number};
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: API
     data: any;
 }
 
-interface NetworkParameters {
+export interface NetworkParameters {
     panID: number;
-    extendedPanID: number;
+    extendedPanID: string; // `0x${string}` same as IEEE address
     channel: number;
+    nwkUpdateID: number;
 }
-
-export {
-    SerialPortOptions,
-    NetworkOptions,
-    CoordinatorVersion,
-    DeviceType,
-    LQI,
-    LQINeighbor,
-    RoutingTable,
-    Backup,
-    NetworkParameters,
-    StartResult,
-    RoutingTableEntry,
-    AdapterOptions,
-};

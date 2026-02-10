@@ -97,10 +97,10 @@ export enum DataType {
     /** class=composite, length=0x0000-0xFFFE, non-value=0xFFFF */
     LONG_CHAR_STR = 0x44,
 
-    /** class=composite, length=variable, non-value=[0]==0xFFFF */
+    /** class=composite, length=variable, non-value=(length=0xFFFF) */
     ARRAY = 0x48,
 
-    /** class=composite, length=variable, non-value=(length) */
+    /** class=composite, length=variable, non-value=(length=0xFFFF) */
     STRUCT = 0x4c,
 
     /** class=composite, length=max(0xFFFE * DataType) non-value=(length=0xFFFF) */
@@ -133,8 +133,8 @@ export enum DataType {
 
 /** @TODO strings for backwards compat in tests. Should be moved to numbers. */
 export enum DataTypeClass {
-    ANALOG = 'ANALOG',
-    DISCRETE = 'DISCRETE',
+    ANALOG = "ANALOG",
+    DISCRETE = "DISCRETE",
 }
 
 export enum BuffaloZclDataType {
@@ -147,7 +147,7 @@ export enum BuffaloZclDataType {
     EXTENSION_FIELD_SETS = 1006,
     LIST_THERMO_TRANSITIONS = 1007,
     BUFFER = 1008,
-    GDP_FRAME = 1009,
+    GPD_FRAME = 1009,
     STRUCTURED_SELECTOR = 1010,
     LIST_TUYA_DATAPOINT_VALUES = 1011,
     LIST_MIBOXER_ZONES = 1012,
@@ -157,13 +157,12 @@ export enum BuffaloZclDataType {
 
 /** @TODO strings for backwards compat in tests. Should be moved to numbers. */
 export enum ParameterCondition {
-    STATUS_EQUAL = 'statusEquals',
-    STATUS_NOT_EQUAL = 'statusNotEquals',
-    MINIMUM_REMAINING_BUFFER_BYTES = 'minimumRemainingBufferBytes',
-    DIRECTION_EQUAL = 'directionEquals',
-    BITMASK_SET = 'bitMaskSet',
-    BITFIELD_ENUM = 'bitFieldEnum',
-    DATA_TYPE_CLASS_EQUAL = 'dataTypeValueTypeEquals',
+    MINIMUM_REMAINING_BUFFER_BYTES = "minimumRemainingBufferBytes",
+    BITMASK_SET = "bitMaskSet",
+    BITFIELD_ENUM = "bitFieldEnum",
+    DATA_TYPE_CLASS_EQUAL = "dataTypeValueTypeEquals",
+    FIELD_EQUAL = "fieldEquals",
+    FIELD_GT = "fieldGT",
 }
 
 export enum FrameType {
@@ -190,4 +189,36 @@ export enum StructuredIndicatorType {
     WriteAdd = 0x10,
     /** Remove element from the set/bag */
     WriteRemove = 0x20,
+}
+
+/** Mapping of descriptive string power to source bits. */
+export enum PowerSource {
+    Unknown = 0,
+    "Mains (single phase)" = 1,
+    "Mains (3 phase)" = 2,
+    Battery = 3,
+    "DC Source" = 4,
+    "Emergency mains constantly powered" = 5,
+    "Emergency mains and transfer switch" = 6,
+}
+
+/** Used by the RSSI Location cluster */
+export enum LocationMethod {
+    /** A method based on RSSI measurements from three or more sources. */
+    Lateration = 0x00,
+    /** The location reported is the location of the neighboring device with the strongest received signal. */
+    Signposting = 0x01,
+    /**
+     * RSSI signatures are collected into a database at commissioning time.
+     * The location reported is the location taken from the RSSI signature database that most closely matches the device’s own RSSI signature.
+     */
+    RfFingerprinting = 0x02,
+    /** The location is obtained by accessing an out-of-band device (that is, the device providing the location is not part of the network). */
+    OutOfBand = 0x03,
+    /**
+     * The location is performed in a centralized way (e.g., by the GW) by a device on the network.
+     * Different from the above because the device performing the localization is part of the network.
+     */
+    Centralized = 0x04,
+    // 0x40 to 0xff - Reserved for manufacturer specific location methods.
 }

@@ -1,6 +1,6 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import {Readable, ReadableOptions} from 'stream';
+import {Readable, type ReadableOptions} from "node:stream";
 
 export class ZBOSSWriter extends Readable {
     private bytesToWrite: number[];
@@ -19,7 +19,7 @@ export class ZBOSSWriter extends Readable {
         // logger.debug(`>>>> [FRAME raw=${buffer.toString('hex')}]`, NS);
 
         // this.push(buffer);
-        this.emit('data', buffer);
+        this.emit("data", buffer);
     }
 
     public writeByte(byte: number): void {
@@ -29,11 +29,11 @@ export class ZBOSSWriter extends Readable {
     public writeAvailable(): boolean {
         if (this.readableLength < this.readableHighWaterMark) {
             return true;
-        } else {
-            this.writeFlush();
-
-            return false;
         }
+
+        this.writeFlush();
+
+        return false;
     }
 
     /**
@@ -45,5 +45,5 @@ export class ZBOSSWriter extends Readable {
         }
     }
 
-    public _read(): void {}
+    public override _read(): void {}
 }

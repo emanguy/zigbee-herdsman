@@ -1,17 +1,13 @@
-import events from 'events';
+import events from "node:events";
 
-import Bonjour, {Service} from 'bonjour-service';
-
-import * as Models from '../models';
-import {logger} from '../utils/logger';
-import {BroadcastAddress} from '../zspec/enums';
-import * as Zcl from '../zspec/zcl';
-import * as Zdo from '../zspec/zdo';
-import * as ZdoTypes from '../zspec/zdo/definition/tstypes';
-import * as AdapterEvents from './events';
-import * as TsType from './tstype';
-
-const NS = 'zh:adapter';
+import type * as Models from "../models";
+import type {BroadcastAddress} from "../zspec/enums";
+import * as Zcl from "../zspec/zcl";
+import type * as Zdo from "../zspec/zdo";
+import type * as ZdoTypes from "../zspec/zdo/definition/tstypes";
+import {discoverAdapter} from "./adapterDiscovery";
+import type * as AdapterEvents from "./events";
+import type * as TsType from "./tstype";
 
 interface AdapterEventMap {
     deviceJoined: [payload: AdapterEvents.DeviceJoinedPayload];
@@ -21,7 +17,7 @@ interface AdapterEventMap {
     deviceLeave: [payload: AdapterEvents.DeviceLeavePayload];
 }
 
-abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
+export abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
     public hasZdoMessageOverhead: boolean;
     public manufacturerID: Zcl.ManufacturerCode;
     protected networkOptions: TsType.NetworkOptions;
@@ -54,135 +50,57 @@ abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
         backupPath: string,
         adapterOptions: TsType.AdapterOptions,
     ): Promise<Adapter> {
-        const {ZStackAdapter} = await import('./z-stack/adapter');
-        const {DeconzAdapter} = await import('./deconz/adapter');
-        const {ZiGateAdapter} = await import('./zigate/adapter');
-        const {EZSPAdapter} = await import('./ezsp/adapter');
-        const {EmberAdapter} = await import('./ember/adapter');
-        const {ZBOSSAdapter} = await import('./zboss/adapter');
-        type AdapterImplementation =
-            | typeof ZStackAdapter
-            | typeof DeconzAdapter
-            | typeof ZiGateAdapter
-            | typeof EZSPAdapter
-            | typeof EmberAdapter
-            | typeof ZBOSSAdapter;
-
-        let adapters: AdapterImplementation[];
-        const adapterLookup = {
-            zstack: ZStackAdapter,
-            deconz: DeconzAdapter,
-            zigate: ZiGateAdapter,
-            ezsp: EZSPAdapter,
-            ember: EmberAdapter,
-            zboss: ZBOSSAdapter,
-        };
-
-        if (serialPortOptions.adapter && serialPortOptions.adapter !== 'auto') {
-            if (adapterLookup[serialPortOptions.adapter]) {
-                adapters = [adapterLookup[serialPortOptions.adapter]];
-            } else {
-                throw new Error(`Adapter '${serialPortOptions.adapter}' does not exists, possible options: ${Object.keys(adapterLookup).join(', ')}`);
-            }
-        } else {
-            adapters = Object.values(adapterLookup);
+        const discovered = await discoverAdapter(serialPortOptions.adapter, serialPortOptions.path);
+        serialPortOptions.adapter = discovered.adapter;
+        serialPortOptions.path = discovered.path;
+        if (serialPortOptions.baudRate === undefined && discovered.baudRate !== undefined) {
+            serialPortOptions.baudRate = discovered.baudRate;
+        }
+        if (serialPortOptions.rtscts === undefined && discovered.rtscts !== undefined) {
+            serialPortOptions.rtscts = discovered.rtscts;
         }
 
-        // Use ZStackAdapter by default
-        let adapter: AdapterImplementation = adapters[0];
+        switch (discovered.adapter) {
+            case "zstack": {
+                const {ZStackAdapter} = await import("./z-stack/adapter/zStackAdapter.js");
 
-        if (!serialPortOptions.path) {
-            logger.debug('No path provided, auto detecting path', NS);
-            for (const candidate of adapters) {
-                const path = await candidate.autoDetectPath();
-                if (path) {
-                    logger.debug(`Auto detected path '${path}' from adapter '${candidate.name}'`, NS);
-                    serialPortOptions.path = path;
-                    adapter = candidate;
-                    break;
-                }
+                return new ZStackAdapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
             }
+            case "ember": {
+                const {EmberAdapter} = await import("./ember/adapter/emberAdapter.js");
 
-            if (!serialPortOptions.path) {
-                throw new Error('No path provided and failed to auto detect path');
+                return new EmberAdapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
             }
-        } else if (serialPortOptions.path.startsWith('mdns://')) {
-            const mdnsDevice = serialPortOptions.path.substring(7);
+            case "deconz": {
+                const {DeconzAdapter} = await import("./deconz/adapter/deconzAdapter.js");
 
-            if (mdnsDevice.length == 0) {
-                throw new Error(`No mdns device specified. You must specify the coordinator mdns service type after mdns://, e.g. mdns://my-adapter`);
+                return new DeconzAdapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
             }
+            case "zigate": {
+                const {ZiGateAdapter} = await import("./zigate/adapter/zigateAdapter.js");
 
-            const bj = new Bonjour();
-            const mdnsTimeout = 2000; // timeout for mdns scan
+                return new ZiGateAdapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
+            }
+            case "zboss": {
+                const {ZBOSSAdapter} = await import("./zboss/adapter/zbossAdapter.js");
 
-            logger.info(`Starting mdns discovery for coordinator: ${mdnsDevice}`, NS);
+                return new ZBOSSAdapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
+            }
+            case "zoh": {
+                const {ZoHAdapter} = await import("./zoh/adapter/zohAdapter.js");
 
-            await new Promise((resolve, reject) => {
-                bj.findOne({type: mdnsDevice}, mdnsTimeout, function (service: Service) {
-                    if (service) {
-                        if (service.txt?.radio_type && service.txt?.baud_rate && service.addresses && service.port) {
-                            const mdnsIp = service.addresses[0];
-                            const mdnsPort = service.port;
-                            const mdnsAdapter = (
-                                service.txt.radio_type == 'znp' ? 'zstack' : service.txt.radio_type
-                            ) as TsType.SerialPortOptions['adapter'];
-                            const mdnsBaud = parseInt(service.txt.baud_rate);
+                return new ZoHAdapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
+            }
+            // @deprecated
+            case "ezsp": {
+                const {EZSPAdapter} = await import("./ezsp/adapter/ezspAdapter.js");
 
-                            logger.info(`Coordinator Ip: ${mdnsIp}`, NS);
-                            logger.info(`Coordinator Port: ${mdnsPort}`, NS);
-                            logger.info(`Coordinator Radio: ${mdnsAdapter}`, NS);
-                            logger.info(`Coordinator Baud: ${mdnsBaud}\n`, NS);
-                            bj.destroy();
-
-                            serialPortOptions.path = `tcp://${mdnsIp}:${mdnsPort}`;
-                            serialPortOptions.adapter = mdnsAdapter;
-                            serialPortOptions.baudRate = mdnsBaud;
-
-                            if (
-                                serialPortOptions.adapter &&
-                                serialPortOptions.adapter !== 'auto' &&
-                                adapterLookup[serialPortOptions.adapter] !== undefined
-                            ) {
-                                adapter = adapterLookup[serialPortOptions.adapter];
-                                resolve(new adapter(networkOptions, serialPortOptions, backupPath, adapterOptions));
-                            } else {
-                                reject(new Error(`Adapter ${serialPortOptions.adapter} is not supported.`));
-                            }
-                        } else {
-                            bj.destroy();
-                            reject(
-                                new Error(
-                                    `Coordinator returned wrong Zeroconf format! The following values are expected:\n` +
-                                        `txt.radio_type, got: ${service.txt?.radio_type}\n` +
-                                        `txt.baud_rate, got: ${service.txt?.baud_rate}\n` +
-                                        `address, got: ${service.addresses?.[0]}\n` +
-                                        `port, got: ${service.port}`,
-                                ),
-                            );
-                        }
-                    } else {
-                        bj.destroy();
-                        reject(new Error(`Coordinator [${mdnsDevice}] not found after timeout of ${mdnsTimeout}ms!`));
-                    }
-                });
-            });
-        } else {
-            try {
-                // Determine adapter to use
-                for (const candidate of adapters) {
-                    if (await candidate.isValidPath(serialPortOptions.path)) {
-                        logger.debug(`Path '${serialPortOptions.path}' is valid for '${candidate.name}'`, NS);
-                        adapter = candidate;
-                        break;
-                    }
-                }
-            } catch (error) {
-                logger.debug(`Failed to validate path: '${error}'`, NS);
+                return new EZSPAdapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
+            }
+            default: {
+                throw new Error(`Adapter '${discovered.adapter}' does not exists, possible options: zstack, ember, deconz, zigate, zboss, zoh, ezsp`);
             }
         }
-
-        return new adapter(networkOptions, serialPortOptions, backupPath, adapterOptions);
     }
 
     public abstract start(): Promise<TsType.StartResult>;
@@ -193,7 +111,7 @@ abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
 
     public abstract getCoordinatorVersion(): Promise<TsType.CoordinatorVersion>;
 
-    public abstract reset(type: 'soft' | 'hard'): Promise<void>;
+    public abstract reset(type: "soft" | "hard"): Promise<void>;
 
     public abstract supportsBackup(): Promise<boolean>;
 
@@ -201,9 +119,7 @@ abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
 
     public abstract getNetworkParameters(): Promise<TsType.NetworkParameters>;
 
-    public abstract setTransmitPower(value: number): Promise<void>;
-
-    public abstract addInstallCode(ieeeAddress: string, key: Buffer): Promise<void>;
+    public abstract addInstallCode(ieeeAddress: string, key: Buffer, hashed: boolean): Promise<void>;
 
     public abstract waitFor(
         networkAddress: number | undefined,
@@ -240,7 +156,7 @@ abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
         clusterId: K,
         payload: Buffer,
         disableResponse: boolean,
-    ): Promise<ZdoTypes.RequestToResponseMap[K] | void>;
+    ): Promise<ZdoTypes.RequestToResponseMap[K] | undefined>;
 
     public abstract permitJoin(seconds: number, networkAddress?: number): Promise<void>;
 
@@ -257,11 +173,18 @@ abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
         disableResponse: boolean,
         disableRecovery: boolean,
         sourceEndpoint?: number,
-    ): Promise<AdapterEvents.ZclPayload | void>;
+        profileId?: number,
+    ): Promise<AdapterEvents.ZclPayload | undefined>;
 
-    public abstract sendZclFrameToGroup(groupID: number, zclFrame: Zcl.Frame, sourceEndpoint?: number): Promise<void>;
+    public abstract sendZclFrameToGroup(groupID: number, zclFrame: Zcl.Frame, sourceEndpoint?: number, profileId?: number): Promise<void>;
 
-    public abstract sendZclFrameToAll(endpoint: number, zclFrame: Zcl.Frame, sourceEndpoint: number, destination: BroadcastAddress): Promise<void>;
+    public abstract sendZclFrameToAll(
+        endpoint: number,
+        zclFrame: Zcl.Frame,
+        sourceEndpoint: number,
+        destination: BroadcastAddress,
+        profileId?: number,
+    ): Promise<void>;
 
     /**
      * InterPAN
@@ -271,7 +194,13 @@ abstract class Adapter extends events.EventEmitter<AdapterEventMap> {
 
     public abstract sendZclFrameInterPANToIeeeAddr(zclFrame: Zcl.Frame, ieeeAddress: string): Promise<void>;
 
-    public abstract sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number): Promise<AdapterEvents.ZclPayload>;
+    public abstract sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number, disableResponse: false): Promise<AdapterEvents.ZclPayload>;
+    public abstract sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number, disableResponse: true): Promise<undefined>;
+    public abstract sendZclFrameInterPANBroadcast(
+        zclFrame: Zcl.Frame,
+        timeout: number,
+        disableResponse: boolean,
+    ): Promise<AdapterEvents.ZclPayload | undefined>;
 
     public abstract restoreChannelInterPAN(): Promise<void>;
 }

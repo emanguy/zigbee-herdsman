@@ -1,16 +1,15 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import EventEmitter from 'events';
-
-import {Queue} from '../../../utils';
-import {logger} from '../../../utils/logger';
-import * as ZSpec from '../../../zspec';
-import {EUI64, ExtendedPanId, NodeId, PanId} from '../../../zspec/tstypes';
-import * as Zcl from '../../../zspec/zcl';
-import {Clusters} from '../../../zspec/zcl/definition/cluster';
-import * as Zdo from '../../../zspec/zdo';
-import {SerialPortOptions} from '../../tstype';
-import {FIXED_ENDPOINTS} from '../adapter/endpoints';
+import EventEmitter from "node:events";
+import {AsyncMutex} from "../../../utils/async-mutex";
+import {logger} from "../../../utils/logger";
+import * as ZSpec from "../../../zspec";
+import type {Eui64, ExtendedPanId, NodeId, PanId} from "../../../zspec/tstypes";
+import * as Zcl from "../../../zspec/zcl";
+import {Clusters} from "../../../zspec/zcl/definition/cluster";
+import * as Zdo from "../../../zspec/zdo";
+import type {SerialPortOptions} from "../../tstype";
+import {FIXED_ENDPOINTS} from "../adapter/endpoints";
 import {
     INTERPAN_APS_FRAME_CONTROL_NO_DELIVERY_MODE,
     INTERPAN_APS_FRAME_DELIVERY_MODE_MASK,
@@ -23,45 +22,46 @@ import {
     SHORT_DEST_FRAME_CONTROL,
     STUB_NWK_FRAME_CONTROL,
     STUB_NWK_SIZE,
-} from '../consts';
+} from "../consts";
 import {
     EmberApsOption,
     EmberCounterType,
     EmberDeviceUpdate,
-    EmberDutyCycleState,
-    EmberEntropySource,
-    EmberEventUnits,
-    EmberExtendedSecurityBitmask,
+    type EmberDutyCycleState,
+    type EmberEntropySource,
+    type EmberEventUnits,
+    type EmberExtendedSecurityBitmask,
+    EmberGPStatus,
     EmberGpApplicationId,
     EmberGpKeyType,
     EmberGpSecurityLevel,
-    EmberGPStatus,
     EmberIncomingMessageType,
     EmberInterpanMessageType,
     EmberJoinDecision,
     EmberKeyStatus,
     EmberLeaveNetworkOption,
-    EmberLibraryId,
-    EmberLibraryStatus,
-    EmberMacPassthroughType,
-    EmberMultiPhyNwkConfig,
-    EmberNetworkStatus,
-    EmberNodeType,
+    type EmberLibraryId,
+    type EmberLibraryStatus,
+    type EmberMacPassthroughType,
+    type EmberMultiPhyNwkConfig,
+    type EmberNetworkStatus,
+    type EmberNodeType,
     EmberOutgoingMessageType,
-    EmberSourceRouteDiscoveryMode,
+    type EmberSourceRouteDiscoveryMode,
     EmberStackError,
-    EmberTransmitPriority,
-    EmberTXPowerMode,
-    EzspNetworkScanType,
+    type EmberTransmitPriority,
+    type EmberTXPowerMode,
+    type EzspNetworkScanType,
     EzspStatus,
-    EzspZllNetworkOperation,
-    IEEE802154CcaMode,
+    type EzspZllNetworkOperation,
+    type IEEE802154CcaMode,
     SecManFlag,
     SecManKeyType,
     SLStatus,
-} from '../enums';
-import {EzspError} from '../ezspError';
-import {
+} from "../enums";
+import {EzspError} from "../ezspError";
+import type {
+    Ember802154RadioPriorities,
     EmberAesMmoHashContext,
     EmberApsFrame,
     EmberBeaconClassificationParams,
@@ -108,11 +108,11 @@ import {
     SecManContext,
     SecManKey,
     SecManNetworkKeyInfo,
-} from '../types';
-import {UartAsh} from '../uart/ash';
-import {initSecurityManagerContext} from '../utils/initters';
-import {highByte, highLowToInt, lowByte} from '../utils/math';
-import {EzspBuffalo} from './buffalo';
+} from "../types";
+import {UartAsh} from "../uart/ash";
+import {initSecurityManagerContext} from "../utils/initters";
+import {highByte, highLowToInt, lowByte} from "../utils/math";
+import {EzspBuffalo} from "./buffalo";
 import {
     EMBER_ENCRYPTION_KEY_SIZE,
     EZSP_EXTENDED_FRAME_CONTROL_HB_INDEX,
@@ -139,21 +139,22 @@ import {
     EZSP_MAX_FRAME_LENGTH,
     EZSP_PARAMETERS_INDEX,
     EZSP_SEQUENCE_INDEX,
-} from './consts';
+} from "./consts";
 import {
-    EmberLeaveReason,
-    EmberRejoinReason,
-    EzspConfigId,
-    EzspEndpointFlag,
+    type EmberLeaveReason,
+    type EmberRejoinReason,
+    type EzspConfigId,
+    type EzspEndpointFlag,
     EzspExtendedValueId,
     EzspFrameID,
+    type EzspMemoryUsageData,
     EzspMfgTokenId,
-    EzspPolicyId,
+    type EzspPolicyId,
     EzspSleepMode,
     EzspValueId,
-} from './enums';
+} from "./enums";
 
-const NS = 'zh:ember:ezsp';
+const NS = "zh:ember:ezsp";
 
 /**
  * Simple object to resolve/timeout on command waiting for response.
@@ -192,29 +193,19 @@ export interface EmberEzspEventMap {
     /** ezspIncomingMessageHandler */
     incomingMessage: [type: EmberIncomingMessageType, apsFrame: EmberApsFrame, lastHopLqi: number, sender: NodeId, messageContents: Buffer];
     /** @see Ezsp.ezspMacFilterMatchMessageHandler */
-    touchlinkMessage: [sourcePanId: PanId, sourceAddress: EUI64, groupId: number, lastHopLqi: number, messageContents: Buffer];
+    touchlinkMessage: [sourcePanId: PanId, sourceAddress: Eui64, groupId: number, lastHopLqi: number, messageContents: Buffer];
     /** @see Ezsp.ezspStackStatusHandler */
     stackStatus: [status: SLStatus];
     /** @see Ezsp.ezspTrustCenterJoinHandler */
     trustCenterJoin: [
         newNodeId: NodeId,
-        newNodeEui64: EUI64,
+        newNodeEui64: Eui64,
         status: EmberDeviceUpdate,
         policyDecision: EmberJoinDecision,
         parentOfNewNodeId: NodeId,
     ];
     /** @see Ezsp.ezspMessageSentHandler */
     messageSent: [status: SLStatus, type: EmberOutgoingMessageType, indexOrDestination: number, apsFrame: EmberApsFrame, messageTag: number];
-    /** @see Ezsp.ezspGpepIncomingMessageHandler */
-    greenpowerMessage: [
-        sequenceNumber: number,
-        commandIdentifier: number,
-        sourceId: number,
-        frameCounter: number,
-        gpdCommandId: number,
-        gpdCommandPayload: Buffer,
-        gpdLink: number,
-    ];
 }
 
 /**
@@ -247,7 +238,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     private frameSequence: number;
     /** Sequence used for EZSP send() tagging. static uint8_t */
     private sendSequence: number;
-    private readonly queue: Queue;
+    private readonly queue: AsyncMutex;
     /** Awaiting response resolve/timer struct. undefined if not waiting for response. */
     private responseWaiter?: EzspWaiter;
 
@@ -262,7 +253,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         this.callbackFrameContents = Buffer.alloc(EZSP_MAX_FRAME_LENGTH);
         this.callbackBuffalo = new EzspBuffalo(this.callbackFrameContents, 0);
 
-        this.queue = new Queue(1);
+        this.queue = new AsyncMutex();
         this.ash = new UartAsh(options);
 
         this.version = 0;
@@ -300,7 +291,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     }
 
     public async start(): Promise<EzspStatus> {
-        logger.info(`======== EZSP starting ========`, NS);
+        logger.info("======== EZSP starting ========", NS);
 
         let status: EzspStatus = EzspStatus.HOST_FATAL_ERROR;
 
@@ -315,10 +306,10 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             status = await this.ash.start();
 
             if (status === EzspStatus.SUCCESS) {
-                logger.info(`======== EZSP started ========`, NS);
+                logger.info("======== EZSP started ========", NS);
                 // registered after reset sequence
-                this.ash.on('frame', this.onAshFrame.bind(this));
-                this.ash.on('fatalError', this.onAshFatalError.bind(this));
+                this.ash.on("frame", this.onAshFrame.bind(this));
+                this.ash.on("fatalError", this.onAshFatalError.bind(this));
 
                 return status;
             }
@@ -335,7 +326,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         await this.ash.stop();
         this.ash.removeAllListeners();
 
-        logger.info(`======== EZSP stopped ========`, NS);
+        logger.info("======== EZSP stopped ========", NS);
     }
 
     /**
@@ -357,21 +348,22 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     }
 
     /**
-     * Triggered by @see 'FATAL_ERROR'
+     * Triggered by ASH layer @see 'fatalError'
      */
     private onAshFatalError(status: EzspStatus): void {
-        this.emit('ncpNeedsResetAndInit', status);
+        logger.error(`Fatal error, status=${EzspStatus[status]}. Last Frame: ${this.frameToString}`, NS);
+        this.emit("ncpNeedsResetAndInit", status);
     }
 
     /**
-     * Triggered by @see 'FRAME'
+     * Triggered by ASH layer @see 'frame'
      */
     private onAshFrame(): void {
         const buffer = this.ash.rxQueue.getPrecedingEntry();
 
         if (buffer == null) {
             // something is seriously wrong
-            logger.error(`Found no buffer in queue but ASH layer sent signal that one was available.`, NS);
+            logger.error("Found no buffer in queue but ASH layer sent signal that one was available.", NS);
             return;
         }
 
@@ -414,7 +406,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
 
                 this.responseWaiter = undefined; // done, gc
             } else {
-                logger.debug(`Received response while not expecting one. Ignoring.`, NS);
+                logger.debug("Received response while not expecting one. Ignoring.", NS);
             }
         }
     }
@@ -454,12 +446,13 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             status !== EzspStatus.ERROR_QUEUE_FULL &&
             status !== EzspStatus.ERROR_WRONG_DIRECTION
         ) {
-            this.emit('ncpNeedsResetAndInit', status);
+            this.emit("ncpNeedsResetAndInit", status);
         }
     }
 
     private nextFrameSequence(): number {
-        return (this.frameSequence = ++this.frameSequence & 0xff);
+        this.frameSequence = ++this.frameSequence & 0xff;
+        return this.frameSequence;
     }
 
     private startCommand(command: number): EzspBuffalo {
@@ -509,7 +502,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      */
     private async sendCommand(sendBuffalo: EzspBuffalo): Promise<EzspStatus> {
         if (!this.checkConnection()) {
-            logger.debug(`[SEND COMMAND] NOT CONNECTED`, NS);
+            logger.debug("[SEND COMMAND] NOT CONNECTED", NS);
             return EzspStatus.NOT_CONNECTED;
         }
 
@@ -541,7 +534,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             return EzspStatus.ERROR_COMMAND_TOO_LONG;
         }
 
-        return await this.queue.execute<EzspStatus>(async () => {
+        return await this.queue.run<EzspStatus>(async () => {
             let status: EzspStatus = EzspStatus.ASH_ERROR_TIMEOUTS; // will be overwritten below as necessary
             const frameId = sendBuffalo.getFrameId();
             const frameString = `[FRAME: ID=${frameId}:"${EzspFrameID[frameId]}" Seq=${sequence} Len=${length}]`;
@@ -586,10 +579,8 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @returns
      */
     public validateReceivedFrame(buffalo: EzspBuffalo): EzspStatus {
-        let status: EzspStatus = EzspStatus.SUCCESS;
-        let frameControl: number, frameId: number, parametersIndex: number;
-        // eslint-disable-next-line prefer-const
-        [status, frameControl, frameId, parametersIndex] = buffalo.getResponseMetadata();
+        const [retStatus, frameControl, frameId, parametersIndex] = buffalo.getResponseMetadata();
+        let status = retStatus;
 
         if (frameId === EzspFrameID.INVALID_COMMAND) {
             status = buffalo.getResponseByte(parametersIndex);
@@ -654,6 +645,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             case EzspFrameID.COUNTER_ROLLOVER_HANDLER: {
                 const type: EmberCounterType = this.callbackBuffalo.readUInt8();
                 this.ezspCounterRolloverHandler(type);
+                break;
+            }
+            case EzspFrameID.MUX_INVALID_RX_HANDLER: {
+                if (this.version >= 0x11) {
+                    const newRxChannel = this.callbackBuffalo.readUInt8();
+                    const oldRxChannel = this.callbackBuffalo.readUInt8();
+                    this.ezspMuxInvalidRxHandler(newRxChannel, oldRxChannel);
+                }
                 break;
             }
             case EzspFrameID.CUSTOM_FRAME_HANDLER: {
@@ -861,12 +860,18 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
                     };
                     const messageContents = this.callbackBuffalo.readPayload();
                     this.ezspMacFilterMatchMessageHandler(filterIndexMatch, legacyPassthroughType, packetInfo, messageContents);
-                } else {
+                } else if (this.version < 0x12) {
                     const filterIndexMatch = this.callbackBuffalo.readUInt8();
                     const legacyPassthroughType: EmberMacPassthroughType = this.callbackBuffalo.readUInt8();
                     const packetInfo = this.callbackBuffalo.readEmberRxPacketInfo();
                     const messageContents = this.callbackBuffalo.readPayload();
                     this.ezspMacFilterMatchMessageHandler(filterIndexMatch, legacyPassthroughType, packetInfo, messageContents);
+                } else {
+                    const filterValueMatch = this.callbackBuffalo.readUInt16();
+                    const legacyPassthroughType: EmberMacPassthroughType = this.callbackBuffalo.readUInt8();
+                    const packetInfo = this.callbackBuffalo.readEmberRxPacketInfo();
+                    const messageContents = this.callbackBuffalo.readPayload();
+                    this.ezspMacFilterMatchMessageHandler(filterValueMatch, legacyPassthroughType, packetInfo, messageContents);
                 }
                 break;
             }
@@ -1059,6 +1064,22 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
                 const mic = this.callbackBuffalo.readUInt32();
                 const proxyTableIndex = this.callbackBuffalo.readUInt8();
                 const gpdCommandPayload = this.callbackBuffalo.readPayload();
+                let packetInfo: EmberRxPacketInfo;
+
+                if (this.version < 0x10) {
+                    packetInfo = {
+                        senderShortId: ZSpec.NULL_NODE_ID,
+                        senderLongId: ZSpec.BLANK_EUI64,
+                        bindingIndex: ZSpec.NULL_BINDING,
+                        addressIndex: 0xff,
+                        lastHopLqi: gpdLink, // technically not accurate (this is rssi + lqi[0..3] map)
+                        lastHopRssi: 0,
+                        lastHopTimestamp: 0,
+                    };
+                } else {
+                    packetInfo = this.callbackBuffalo.readEmberRxPacketInfo();
+                }
+
                 this.ezspGpepIncomingMessageHandler(
                     gpStatus,
                     gpdLink,
@@ -1073,6 +1094,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
                     mic,
                     proxyTableIndex,
                     gpdCommandPayload,
+                    packetInfo,
                 );
                 break;
             }
@@ -1086,7 +1108,8 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @returns uint8_t
      */
     private nextSendSequence(): number {
-        return (this.sendSequence = ++this.sendSequence & MESSAGE_TAG_MASK);
+        this.sendSequence = ++this.sendSequence & MESSAGE_TAG_MASK;
+        return this.sendSequence;
     }
 
     /**
@@ -1098,7 +1121,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param indexOrDestination uint16_t Depending on the type of addressing used, this is either the NodeId of the destination,
      *     an index into the address table, or an index into the binding table.
      *     Unused for multicast types.
-     *     This must be one of the three ZigBee broadcast addresses for broadcast.
+     *     This must be one of the three Zigbee broadcast addresses for broadcast.
      * @param apsFrame [IN/OUT] EmberApsFrame * The APS frame which is to be added to the message.
      *        Sequence set in OUT as returned by ezspSend${x} command
      * @param message uint8_t * Content of the message.
@@ -1154,9 +1177,9 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             case EmberOutgoingMessageType.BROADCAST:
             case EmberOutgoingMessageType.BROADCAST_WITH_ALIAS: {
                 if (
-                    type == EmberOutgoingMessageType.BROADCAST_WITH_ALIAS ||
-                    (apsFrame.sourceEndpoint == ZSpec.GP_ENDPOINT &&
-                        apsFrame.destinationEndpoint == ZSpec.GP_ENDPOINT &&
+                    type === EmberOutgoingMessageType.BROADCAST_WITH_ALIAS ||
+                    (apsFrame.sourceEndpoint === ZSpec.GP_ENDPOINT &&
+                        apsFrame.destinationEndpoint === ZSpec.GP_ENDPOINT &&
                         apsFrame.options & EmberApsOption.USE_ALIAS_SEQUENCE_NUMBER)
                 ) {
                     nwkRadius = apsFrame.radius ?? nwkRadius;
@@ -1227,7 +1250,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * Function for manipulating the endpoints flags on the NCP.
      * Wrapper for `ezspGetExtendedValue`.
      * @param endpoint uint8_t
-     * @returns EzspStatus
+     * @returns SLStatus
      * @returns flags
      */
     public async ezspGetEndpointFlags(endpoint: number): Promise<[SLStatus, flags: EzspEndpointFlag]> {
@@ -1246,7 +1269,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * Wrapper for `ezspGetExtendedValue`.
      * @param NodeId
      * @param destination
-     * @returns EzspStatus
+     * @returns SLStatus
      * @returns overhead uint8_t
      */
     public async ezspGetSourceRouteOverhead(destination: NodeId): Promise<[SLStatus, overhead: number]> {
@@ -1261,7 +1284,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
 
     /**
      * Wrapper for `ezspGetExtendedValue`.
-     * @returns EzspStatus
+     * @returns SLStatus
      * @returns reason
      * @returns nodeId NodeId*
      */
@@ -1273,6 +1296,27 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         }
 
         return [status, outVal[0], highLowToInt(outVal[2], outVal[1])];
+    }
+
+    /**
+     * Gets memory usage data from sl_memory_manager APIs.
+     * Wrapper for `ezspGetExtendedValue`.
+     * @param type Type of memory usage data to be acquired
+     * @returns SLStatus
+     * @returns Data (in bytes) reflecting current or "boot" memory usage
+     */
+    public async ezspGetMemoryUsageData(type: EzspMemoryUsageData): Promise<[SLStatus, memoryUsageValue: number]> {
+        if (this.version < 0x11) {
+            throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
+        }
+
+        const [status, outValLen, outVal] = await this.ezspGetExtendedValue(EzspExtendedValueId.MEMORY_USAGE_DATA, type, 4);
+
+        if (outValLen < 4) {
+            throw new EzspError(EzspStatus.ERROR_INVALID_VALUE);
+        }
+
+        return [status, outVal[0] + (outVal[1] << 8) + (outVal[2] << 16) + (outVal[3] << 24)];
     }
 
     /**
@@ -1983,7 +2027,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * Indicates that there are currently no pending callbacks.
      */
     ezspNoCallbacks(): void {
-        logger.debug(`ezspNoCallbacks(): callback called`, NS);
+        logger.debug("ezspNoCallbacks(): callback called", NS);
     }
 
     /**
@@ -2048,7 +2092,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         }
 
         const tokenDataLength = this.buffalo.readUInt8();
-        let expectedTokenDataLength: number = 0;
+        let expectedTokenDataLength = 0;
 
         // the size of corresponding the EZSP Mfg token, please refer to app/util/ezsp/ezsp-enum.h
         switch (tokenId) {
@@ -2086,7 +2130,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
                 break;
         }
 
-        if (tokenDataLength != expectedTokenDataLength) {
+        if (tokenDataLength !== expectedTokenDataLength) {
             throw new EzspError(EzspStatus.ERROR_INVALID_VALUE);
         }
 
@@ -2126,7 +2170,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param tokenAddress uint16_t The address of the stack token that has changed.
      */
     ezspStackTokenChangedHandler(tokenAddress: number): void {
-        logger.debug(`ezspStackTokenChangedHandler(): callback called with: [tokenAddress=${tokenAddress}]`, NS);
+        logger.debug(`ezspStackTokenChangedHandler: tokenAddress=${tokenAddress}`, NS);
     }
 
     /**
@@ -2210,7 +2254,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param timerId uint8_t Which timer generated the callback (0 or 1).
      */
     ezspTimerHandler(timerId: number): void {
-        logger.debug(`ezspTimerHandler(): callback called with: [timerId=${timerId}]`, NS);
+        logger.debug(`ezspTimerHandler: timerId=${timerId}`, NS);
     }
 
     /**
@@ -2277,8 +2321,18 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param type Type of Counter
      */
     ezspCounterRolloverHandler(type: EmberCounterType): void {
-        logger.debug(`ezspCounterRolloverHandler(): callback called with: [type=${EmberCounterType[type]}]`, NS);
+        logger.debug(`ezspCounterRolloverHandler: type=${EmberCounterType[type]}`, NS);
         logger.info(`NCP Counter ${EmberCounterType[type]} rolled over.`, NS);
+    }
+
+    /**
+     * Callback
+     * This call is fired when mux detects an invalid rx case, which would be different rx channels for different protocol contexts, when fast channel switching is not enabled
+     * @param newRxChannel uint8_t
+     * @param oldRxChannel uint8_t
+     */
+    ezspMuxInvalidRxHandler(newRxChannel: number, oldRxChannel: number) {
+        logger.debug(`ezspMuxInvalidRxHandler: newRxChannel=${newRxChannel} oldRxChannel=${oldRxChannel}`, NS);
     }
 
     /**
@@ -2378,14 +2432,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param payload uint8_t * The payload of the custom frame.
      */
     ezspCustomFrameHandler(payload: Buffer): void {
-        logger.debug(`ezspCustomFrameHandler(): callback called with: [payload=${payload.toString('hex')}]`, NS);
+        logger.debug(`ezspCustomFrameHandler: payload=${payload.toString("hex")}`, NS);
     }
 
     /**
      * Returns the EUI64 ID of the local node.
      * @returns The 64-bit ID.
      */
-    async ezspGetEui64(): Promise<EUI64> {
+    async ezspGetEui64(): Promise<Eui64> {
         const sendBuffalo = this.startCommand(EzspFrameID.GET_EUI64);
 
         const sendStatus = await this.sendCommand(sendBuffalo);
@@ -2482,7 +2536,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * Get the current scheduler priorities for multiprotocol apps.
      * @returns The current priorities.
      */
-    async ezspRadioGetSchedulerPriorities(): Promise<EmberMultiprotocolPriorities> {
+    async ezspRadioGetSchedulerPriorities(): Promise<Ember802154RadioPriorities | EmberMultiprotocolPriorities> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -2495,7 +2549,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             throw new EzspError(sendStatus);
         }
 
-        const priorities = this.buffalo.readEmberMultiprotocolPriorities();
+        const priorities = this.version < 0x10 ? this.buffalo.readEmberMultiprotocolPriorities() : this.buffalo.readEmber802154RadioPriorities();
 
         return priorities;
     }
@@ -2504,13 +2558,18 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * Set the current scheduler priorities for multiprotocol apps.
      * @param priorities The current priorities.
      */
-    async ezspRadioSetSchedulerPriorities(priorities: EmberMultiprotocolPriorities): Promise<void> {
+    async ezspRadioSetSchedulerPriorities(priorities: Ember802154RadioPriorities | EmberMultiprotocolPriorities): Promise<void> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
 
         const sendBuffalo = this.startCommand(EzspFrameID.RADIO_SET_SCHEDULER_PRIORITIES);
-        sendBuffalo.writeEmberMultiprotocolPriorities(priorities);
+
+        if (this.version < 0x10) {
+            sendBuffalo.writeEmberMultiprotocolPriorities(priorities as EmberMultiprotocolPriorities);
+        } else {
+            sendBuffalo.writeEmber802154RadioPriorities(priorities as Ember802154RadioPriorities);
+        }
 
         const sendStatus = await this.sendCommand(sendBuffalo);
 
@@ -2670,11 +2729,11 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
 
         if (this.version < 0x0e) {
             return SLStatus.OK;
-        } else {
-            const status = this.buffalo.readUInt32();
-
-            return status;
         }
+
+        const status = this.buffalo.readUInt32();
+
+        return status;
     }
 
     /**
@@ -2732,9 +2791,9 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param status Stack status
      */
     ezspStackStatusHandler(status: SLStatus): void {
-        logger.debug(`ezspStackStatusHandler(): callback called with: [status=${SLStatus[status]}]`, NS);
+        logger.debug(`ezspStackStatusHandler: status=${SLStatus[status]}`, NS);
 
-        this.emit('stackStatus', status);
+        this.emit("stackStatus", status);
     }
 
     /**
@@ -2781,7 +2840,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param maxRssiValue int8_t The maximum RSSI value found on the channel.
      */
     ezspEnergyScanResultHandler(channel: number, maxRssiValue: number): void {
-        logger.debug(`ezspEnergyScanResultHandler(): callback called with: [channel=${channel}], [maxRssiValue=${maxRssiValue}]`, NS);
+        logger.debug(`ezspEnergyScanResultHandler: channel=${channel} maxRssiValue=${maxRssiValue}`, NS);
         logger.info(`Energy scan for channel ${channel} reports max RSSI value at ${maxRssiValue} dBm.`, NS);
     }
 
@@ -2795,8 +2854,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      */
     ezspNetworkFoundHandler(networkFound: EmberZigbeeNetwork, lastHopLqi: number, lastHopRssi: number): void {
         logger.debug(
-            () =>
-                `ezspNetworkFoundHandler(): callback called with: [networkFound=${JSON.stringify(networkFound)}], [lastHopLqi=${lastHopLqi}], [lastHopRssi=${lastHopRssi}]`,
+            () => `ezspNetworkFoundHandler: networkFound=${JSON.stringify(networkFound)} lastHopLqi=${lastHopLqi} lastHopRssi=${lastHopRssi}`,
             NS,
         );
     }
@@ -2808,7 +2866,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      *               Other error conditions signify a failure to scan on the channel specified.
      */
     ezspScanCompleteHandler(channel: number, status: SLStatus): void {
-        logger.debug(`ezspScanCompleteHandler(): callback called with: [channel=${channel}], [status=${SLStatus[status]}]`, NS);
+        logger.debug(`ezspScanCompleteHandler: channel=${channel} status=${SLStatus[status]}`, NS);
     }
 
     /**
@@ -2819,7 +2877,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param channel uint8_t The channel that the unused panID was found on.
      */
     ezspUnusedPanIdFoundHandler(panId: PanId, channel: number): void {
-        logger.debug(`ezspUnusedPanIdFoundHandler(): callback called with: [panId=${panId}], [channel=${channel}]`, NS);
+        logger.debug(`ezspUnusedPanIdFoundHandler: panId=${panId} channel=${channel}`, NS);
     }
 
     /**
@@ -2981,7 +3039,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * Network Key.  The stack will call ezspStackStatusHandler to indicate that the
      * network is down, then try to re-establish contact with the network by
      * performing an active scan, choosing a network with matching extended pan id,
-     * and sending a ZigBee network rejoin request. A second call to the
+     * and sending a Zigbee network rejoin request. A second call to the
      * ezspStackStatusHandler callback indicates either the success or the failure
      * of the attempt. The process takes approximately 150 milliseconds per channel
      * to complete.
@@ -2996,12 +3054,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      *        This value could be set to 0 or SL_ZIGBEE_DEVICE_TYPE_UNCHANGED if not needed.
      * @returns An SLStatus value indicating success or the reason for failure.
      */
-    async ezspFindAndRejoinNetwork(
-        haveCurrentNetworkKey: boolean,
-        channelMask: number,
-        reason: number = 0xff,
-        nodeType: number = 0,
-    ): Promise<SLStatus> {
+    async ezspFindAndRejoinNetwork(haveCurrentNetworkKey: boolean, channelMask: number, reason = 0xff, nodeType = 0): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.FIND_AND_REJOIN_NETWORK);
         sendBuffalo.writeUInt8(haveCurrentNetworkKey ? 1 : 0);
         sendBuffalo.writeUInt32(channelMask);
@@ -3053,9 +3106,9 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param childEui64 The EUI64 of the child.
      * @param childType The node type of the child.
      */
-    ezspChildJoinHandler(index: number, joining: boolean, childId: NodeId, childEui64: EUI64, childType: EmberNodeType): void {
+    ezspChildJoinHandler(index: number, joining: boolean, childId: NodeId, childEui64: Eui64, childType: EmberNodeType): void {
         logger.debug(
-            `ezspChildJoinHandler(): callback called with: [index=${index}], [joining=${joining}], [childId=${childId}], [childEui64=${childEui64}], [childType=${childType}]`,
+            `ezspChildJoinHandler: index=${index} joining=${joining} childId=${childId} childEui64=${childEui64} childType=${childType}`,
             NS,
         );
     }
@@ -3142,7 +3195,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @returns NodeId * The parent's node ID. The value is undefined for nodes without parents
      *          (coordinators and nodes that are not joined to a network).
      */
-    async ezspGetParentChildParameters(): Promise<[number, parentEui64: EUI64, parentNodeId: NodeId]> {
+    async ezspGetParentChildParameters(): Promise<[number, parentEui64: Eui64, parentNodeId: NodeId]> {
         const sendBuffalo = this.startCommand(EzspFrameID.GET_PARENT_CHILD_PARAMETERS);
 
         const sendStatus = await this.sendCommand(sendBuffalo);
@@ -3663,7 +3716,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.OK otherwise
      * @returns uint32_t * Return the frame counter of the node from the neighbor or child table
      */
-    async ezspGetNeighborFrameCounter(eui64: EUI64): Promise<[SLStatus, returnFrameCounter: number]> {
+    async ezspGetNeighborFrameCounter(eui64: Eui64): Promise<[SLStatus, returnFrameCounter: number]> {
         const sendBuffalo = this.startCommand(EzspFrameID.GET_NEIGHBOR_FRAME_COUNTER);
         sendBuffalo.writeIeeeAddr(eui64);
 
@@ -3687,7 +3740,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.NOT_FOUND if the node is not found in the neighbor or child table.
      * - SLStatus.OK otherwise
      */
-    async ezspSetNeighborFrameCounter(eui64: EUI64, frameCounter: number): Promise<SLStatus> {
+    async ezspSetNeighborFrameCounter(eui64: Eui64, frameCounter: number): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.SET_NEIGHBOR_FRAME_COUNTER);
         sendBuffalo.writeIeeeAddr(eui64);
         sendBuffalo.writeUInt32(frameCounter);
@@ -4233,7 +4286,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         arrayOfDeviceDutyCycles: EmberPerDeviceDutyCycle[],
     ): void {
         logger.debug(
-            `ezspDutyCycleHandler(): callback called with: [channelPage=${channelPage}], [channel=${channel}], [state=${state}], [totalDevices=${totalDevices}], [arrayOfDeviceDutyCycles=${arrayOfDeviceDutyCycles}]`,
+            `ezspDutyCycleHandler: channelPage=${channelPage} channel=${channel} state=${state} totalDevices=${totalDevices} arrayOfDeviceDutyCycles=${arrayOfDeviceDutyCycles}`,
             NS,
         );
     }
@@ -4323,11 +4376,11 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
 
         if (this.version < 0x0e) {
             return SLStatus.OK;
-        } else {
-            const status = this.buffalo.readUInt32();
-
-            return status;
         }
+
+        const status = this.buffalo.readUInt32();
+
+        return status;
     }
 
     /**
@@ -4723,8 +4776,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      */
     ezspRemoteSetBindingHandler(entry: EmberBindingTableEntry, index: number, policyDecision: SLStatus): void {
         logger.debug(
-            () =>
-                `ezspRemoteSetBindingHandler(): callback called with: [entry=${JSON.stringify(entry)}], [index=${index}], [policyDecision=${SLStatus[policyDecision]}]`,
+            () => `ezspRemoteSetBindingHandler: entry=${JSON.stringify(entry)} index=${index} policyDecision=${SLStatus[policyDecision]}`,
             NS,
         );
     }
@@ -4739,7 +4791,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param policyDecision SLStatus.OK if the binding was removed from the table and any other status if not.
      */
     ezspRemoteDeleteBindingHandler(index: number, policyDecision: SLStatus): void {
-        logger.debug(`ezspRemoteDeleteBindingHandler(): callback called with: [index=${index}], [policyDecision=${SLStatus[policyDecision]}]`, NS);
+        logger.debug(`ezspRemoteDeleteBindingHandler: index=${index} policyDecision=${SLStatus[policyDecision]}`, NS);
     }
 
     //-----------------------------------------------------------------------------
@@ -4765,7 +4817,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     }
 
     /**
-     * Sends a unicast message as per the ZigBee specification.
+     * Sends a unicast message as per the Zigbee specification.
      * The message will arrive at its destination only if there is a known route to the destination node.
      * Setting the ENABLE_ROUTE_DISCOVERY option will cause a route to be discovered if none is known.
      * Setting the FORCE_ROUTE_DISCOVERY option will force route discovery.
@@ -4824,10 +4876,10 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     }
 
     /**
-     * Sends a broadcast message as per the ZigBee specification.
+     * Sends a broadcast message as per the Zigbee specification.
      * @param alias uint16_t (unused in v13-) The aliased source from which we send the broadcast.
      *        This must be SL_ZIGBEE_NULL_NODE_ID if we do not need an aliased source
-     * @param destination The destination to which to send the broadcast. This must be one of the three ZigBee broadcast addresses.
+     * @param destination The destination to which to send the broadcast. This must be one of the three Zigbee broadcast addresses.
      * @param nwkSequence uint8_t (unused in v13-) The alias nwk sequence number. This won't be used if there is no aliased source.
      * @param apsFrame EmberApsFrame * The APS frame for the message.
      * @param radius uint8_t The message will be delivered to all nodes within radius hops of the sender.
@@ -4883,7 +4935,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param euiSource The long source from which to send the broadcast
      * @returns An SLStatus value indicating success or the reason for failure.
      */
-    async ezspProxyNextBroadcastFromLong(euiSource: EUI64): Promise<SLStatus> {
+    async ezspProxyNextBroadcastFromLong(euiSource: Eui64): Promise<SLStatus> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -5023,13 +5075,11 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     ): void {
         logger.debug(
             () =>
-                `ezspMessageSentHandler(): callback called with: [status=${SLStatus[status]}], [type=${EmberOutgoingMessageType[type]}], ` +
-                `[indexOrDestination=${indexOrDestination}], [apsFrame=${JSON.stringify(apsFrame)}], [messageTag=${messageTag}]` +
-                (messageContents ? `, [messageContents=${messageContents.toString('hex')}]` : ''),
+                `ezspMessageSentHandler: status=${SLStatus[status]} type=${EmberOutgoingMessageType[type]} indexOrDestination=${indexOrDestination} apsFrame=${JSON.stringify(apsFrame)} messageTag=${messageTag}${messageContents ? ` messageContents=${messageContents.toString("hex")}` : ""}`,
             NS,
         );
 
-        this.emit('messageSent', status, type, indexOrDestination, apsFrame, messageTag);
+        this.emit("messageSent", status, type, indexOrDestination, apsFrame, messageTag);
     }
 
     /**
@@ -5038,7 +5088,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * that wishes to communicate with many nodes, for example, a gateway, central
      * monitor, or controller. A device using this function was referred to as an
      * 'aggregator' in EmberZNet 2.x and earlier, and is referred to as a
-     * 'concentrator' in the ZigBee specification and EmberZNet 3.  This function
+     * 'concentrator' in the Zigbee specification and EmberZNet 3.  This function
      * enables large scale networks, because the other devices do not have to
      * individually perform bandwidth-intensive route discoveries. Instead, when a
      * remote node sends an APS unicast to a concentrator, its network layer
@@ -5048,7 +5098,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * in which the entire route is listed in the network layer header.) This allows
      * the concentrator to communicate with thousands of devices without requiring
      * large route tables on neighboring nodes.  This function is only available in
-     * ZigBee Pro (stack profile 2), and cannot be called on end devices. Any router
+     * Zigbee Pro (stack profile 2), and cannot be called on end devices. Any router
      * can be a concentrator (not just the coordinator), and there can be multiple
      * concentrators on a network.  Note that a concentrator does not automatically
      * obtain routes to all network nodes after calling this function. Remote
@@ -5123,7 +5173,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.MAC_NO_ACK_RECEIVED - The poll message was sent but not acknowledged by the parent.
      */
     ezspPollCompleteHandler(status: SLStatus): void {
-        logger.debug(`ezspPollCompleteHandler(): callback called with: [status=${SLStatus[status]}]`, NS);
+        logger.debug(`ezspPollCompleteHandler: status=${SLStatus[status]}`, NS);
     }
 
     /**
@@ -5188,7 +5238,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param transmitExpected True if transmit is expected, false otherwise.
      */
     ezspPollHandler(childId: NodeId, transmitExpected: boolean): void {
-        logger.debug(`ezspPollHandler(): callback called with:  [childId=${childId}], [transmitExpected=${transmitExpected}]`, NS);
+        logger.debug(`ezspPollHandler:  childId=${childId} transmitExpected=${transmitExpected}`, NS);
     }
 
     /**
@@ -5202,7 +5252,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.OK - This node has been successfully added.
      * - SLStatus.FAIL - The child was not added to the child/neighbor table.
      */
-    async ezspAddChild(shortId: NodeId, longId: EUI64, nodeType: EmberNodeType): Promise<SLStatus> {
+    async ezspAddChild(shortId: NodeId, longId: Eui64, nodeType: EmberNodeType): Promise<SLStatus> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -5231,7 +5281,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.OK - This node has been successfully removed.
      * - SLStatus.FAIL - The node was not found in either of the child or neighbor tables.
      */
-    async ezspRemoveChild(childEui64: EUI64): Promise<SLStatus> {
+    async ezspRemoveChild(childEui64: Eui64): Promise<SLStatus> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -5256,7 +5306,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param shortId The short ID of the neighbor.
      * @param longId The long ID of the neighbor.
      */
-    async ezspRemoveNeighbor(shortId: NodeId, longId: EUI64): Promise<void> {
+    async ezspRemoveNeighbor(shortId: NodeId, longId: Eui64): Promise<void> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -5291,19 +5341,22 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     ): void {
         logger.debug(
             () =>
-                `ezspIncomingMessageHandler(): callback called with: [type=${EmberIncomingMessageType[type]}], [apsFrame=${JSON.stringify(apsFrame)}], ` +
-                `[packetInfo:${JSON.stringify(packetInfo)}], [messageContents=${messageContents.toString('hex')}]`,
+                `ezspIncomingMessageHandler: type=${EmberIncomingMessageType[type]} apsFrame=${JSON.stringify(apsFrame)} ` +
+                `packetInfo:${JSON.stringify(packetInfo)} messageContents=${messageContents.toString("hex")}`,
             NS,
         );
 
         if (apsFrame.profileId === Zdo.ZDO_PROFILE_ID) {
-            this.emit('zdoResponse', apsFrame, packetInfo.senderShortId, messageContents);
+            this.emit("zdoResponse", apsFrame, packetInfo.senderShortId, messageContents);
         } else if (
             apsFrame.profileId === ZSpec.HA_PROFILE_ID ||
             apsFrame.profileId === ZSpec.WILDCARD_PROFILE_ID ||
-            (apsFrame.profileId === ZSpec.GP_PROFILE_ID && type !== EmberIncomingMessageType.BROADCAST_LOOPBACK)
+            (apsFrame.profileId === ZSpec.GP_PROFILE_ID && type !== EmberIncomingMessageType.BROADCAST_LOOPBACK) ||
+            // TODO: Better (dynamic) way to handle this?
+            // Shelly custom Clusters require a special profile ID
+            apsFrame.profileId === ZSpec.CUSTOM_SHELLY_PROFILE_ID
         ) {
-            this.emit('incomingMessage', type, apsFrame, packetInfo.lastHopLqi, packetInfo.senderShortId, messageContents);
+            this.emit("incomingMessage", type, apsFrame, packetInfo.lastHopLqi, packetInfo.senderShortId, messageContents);
         }
     }
 
@@ -5335,8 +5388,8 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param cost uint8_t The path cost to the concentrator. The cost may decrease as additional route request packets
      *        for this discovery arrive, but the callback is made only once.
      */
-    ezspIncomingManyToOneRouteRequestHandler(source: NodeId, longId: EUI64, cost: number): void {
-        logger.debug(`ezspIncomingManyToOneRouteRequestHandler(): callback called with: [source=${source}], [longId=${longId}], [cost=${cost}]`, NS);
+    ezspIncomingManyToOneRouteRequestHandler(source: NodeId, longId: Eui64, cost: number): void {
+        logger.debug(`ezspIncomingManyToOneRouteRequestHandler: source=${source} longId=${longId} cost=${cost}`, NS);
     }
 
     /**
@@ -5365,7 +5418,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param target The short id of the remote node.
      */
     ezspIncomingRouteErrorHandler(status: SLStatus, target: NodeId): void {
-        logger.debug(`ezspIncomingRouteErrorHandler(): callback called with: [status=${SLStatus[status]}], [target=${target}]`, NS);
+        logger.debug(`ezspIncomingRouteErrorHandler: status=${SLStatus[status]} target=${target}`, NS);
         // NOTE: This can trigger immediately after removal of a device with status MAC_INDIRECT_TIMEOUT
     }
 
@@ -5383,7 +5436,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param target The short ID of the remote node
      */
     ezspIncomingNetworkStatusHandler(errorCode: EmberStackError, target: NodeId): void {
-        logger.debug(`ezspIncomingNetworkStatusHandler(): callback called with: [errorCode=${EmberStackError[errorCode]}], [target=${target}]`, NS);
+        logger.debug(`ezspIncomingNetworkStatusHandler: errorCode=${EmberStackError[errorCode]} target=${target}`, NS);
         logger.info(`Received network/route error ${EmberStackError[errorCode]} for "${target}".`, NS);
     }
 
@@ -5400,14 +5453,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      */
     ezspIncomingRouteRecordHandler(
         source: NodeId,
-        sourceEui: EUI64,
+        sourceEui: Eui64,
         lastHopLqi: number,
         lastHopRssi: number,
         relayCount: number,
         relayList: number[],
     ): void {
         logger.debug(
-            `ezspIncomingRouteRecordHandler(): callback called with: [source=${source}], [sourceEui=${sourceEui}], [lastHopLqi=${lastHopLqi}], [lastHopRssi=${lastHopRssi}], [relayCount=${relayCount}], [relayList=${relayList}]`,
+            `ezspIncomingRouteRecordHandler: source=${source} sourceEui=${sourceEui} lastHopLqi=${lastHopLqi} lastHopRssi=${lastHopRssi} relayCount=${relayCount} relayList=${relayList}`,
             NS,
         );
         // XXX: could at least trigger a `Events.lastSeenChanged` but this is not currently being listened to at the adapter level
@@ -5420,7 +5473,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param parentShortId The parent node of the destination node.
      * @returns SLStatus.OK if send was successful
      */
-    async ezspUnicastCurrentNetworkKey(targetShort: NodeId, targetLong: EUI64, parentShortId: NodeId): Promise<SLStatus> {
+    async ezspUnicastCurrentNetworkKey(targetShort: NodeId, targetLong: Eui64, parentShortId: NodeId): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.UNICAST_CURRENT_NETWORK_KEY);
         sendBuffalo.writeUInt16(targetShort);
         sendBuffalo.writeIeeeAddr(targetLong);
@@ -5476,7 +5529,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.OK if the information was successfully set,
      * - SLStatus.ZIGBEE_ADDRESS_TABLE_ENTRY_IS_ACTIVE otherwise.
      */
-    async ezspSetAddressTableInfo(addressTableIndex: number, eui64: EUI64, id: NodeId): Promise<SLStatus> {
+    async ezspSetAddressTableInfo(addressTableIndex: number, eui64: Eui64, id: NodeId): Promise<SLStatus> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -5511,7 +5564,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      *   Indicates that the entry stored in the address table at the given index is not in use.
      * @returns The EUI64 of the address table entry is copied to this location.
      */
-    async ezspGetAddressTableInfo(addressTableIndex: number): Promise<[SLStatus, nodeId: NodeId, eui64: EUI64]> {
+    async ezspGetAddressTableInfo(addressTableIndex: number): Promise<[SLStatus, nodeId: NodeId, eui64: Eui64]> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -5547,7 +5600,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      *        false if the normal retry interval should be used.
      * @returns An SLStatus value indicating success or the reason for failure. Always `OK` in v13-.
      */
-    async ezspSetExtendedTimeout(remoteEui64: EUI64, extendedTimeout: boolean): Promise<SLStatus> {
+    async ezspSetExtendedTimeout(remoteEui64: Eui64, extendedTimeout: boolean): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.SET_EXTENDED_TIMEOUT);
         sendBuffalo.writeIeeeAddr(remoteEui64);
         sendBuffalo.writeUInt8(extendedTimeout ? 1 : 0);
@@ -5560,11 +5613,11 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
 
         if (this.version < 0x0e) {
             return SLStatus.OK;
-        } else {
-            const status = this.buffalo.readUInt32();
-
-            return status;
         }
+
+        const status = this.buffalo.readUInt32();
+
+        return status;
     }
 
     /**
@@ -5576,7 +5629,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.OK if the retry interval will be increased by SL_ZIGBEE_INDIRECT_TRANSMISSION_TIMEOUT
      * - SLStatus.FAIL if the normal retry interval will be used.
      */
-    async ezspGetExtendedTimeout(remoteEui64: EUI64): Promise<SLStatus> {
+    async ezspGetExtendedTimeout(remoteEui64: Eui64): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.GET_EXTENDED_TIMEOUT);
         sendBuffalo.writeIeeeAddr(remoteEui64);
 
@@ -5590,11 +5643,11 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             const extendedTimeout = this.buffalo.readUInt8() !== 0;
 
             return extendedTimeout ? SLStatus.OK : SLStatus.FAIL;
-        } else {
-            const status = this.buffalo.readUInt32();
-
-            return status;
         }
+
+        const status = this.buffalo.readUInt32();
+
+        return status;
     }
 
     /**
@@ -5620,10 +5673,10 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      */
     async ezspReplaceAddressTableEntry(
         addressTableIndex: number,
-        newEui64: EUI64,
+        newEui64: Eui64,
         newId: NodeId,
         newExtendedTimeout: boolean,
-    ): Promise<[SLStatus, oldEui64: EUI64, oldId: NodeId, oldExtendedTimeout: boolean]> {
+    ): Promise<[SLStatus, oldEui64: Eui64, oldId: NodeId, oldExtendedTimeout: boolean]> {
         const sendBuffalo = this.startCommand(EzspFrameID.REPLACE_ADDRESS_TABLE_ENTRY);
         sendBuffalo.writeUInt8(addressTableIndex);
         sendBuffalo.writeIeeeAddr(newEui64);
@@ -5650,7 +5703,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param eui64 The EUI64 of the node to look up.
      * @returns The short ID of the node or SL_ZIGBEE_NULL_NODE_ID if the short ID is not known.
      */
-    async ezspLookupNodeIdByEui64(eui64: EUI64): Promise<NodeId> {
+    async ezspLookupNodeIdByEui64(eui64: Eui64): Promise<NodeId> {
         const sendBuffalo = this.startCommand(EzspFrameID.LOOKUP_NODE_ID_BY_EUI64);
         sendBuffalo.writeIeeeAddr(eui64);
 
@@ -5674,7 +5727,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.FAIL if the EUI64 is not known.
      * @returns eui64 The EUI64 of the node.
      */
-    async ezspLookupEui64ByNodeId(nodeId: NodeId): Promise<[SLStatus, eui64: EUI64]> {
+    async ezspLookupEui64ByNodeId(nodeId: NodeId): Promise<[SLStatus, eui64: Eui64]> {
         const sendBuffalo = this.startCommand(EzspFrameID.LOOKUP_EUI64_BY_NODE_ID);
         sendBuffalo.writeUInt16(nodeId);
 
@@ -5744,7 +5797,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param id The short id for which a conflict was detected
      */
     ezspIdConflictHandler(id: NodeId): void {
-        logger.debug(`ezspIdConflictHandler(): callback called with: [id=${id}]`, NS);
+        logger.debug(`ezspIdConflictHandler: id=${id}`, NS);
         logger.warning(`An ID conflict was detected for network address '${id}'. Corresponding devices kicked from the network.`, NS);
 
         // XXX: this is currently causing more problems than not doing it, so disabled for now.
@@ -5809,7 +5862,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     ezspMacPassthroughMessageHandler(messageType: EmberMacPassthroughType, packetInfo: EmberRxPacketInfo, messageContents: Buffer): void {
         logger.debug(
             () =>
-                `ezspMacPassthroughMessageHandler(): callback called with: [messageType=${messageType}], [packetInfo=${JSON.stringify(packetInfo)}], [messageContents=${messageContents.toString('hex')}]`,
+                `ezspMacPassthroughMessageHandler: messageType=${messageType} packetInfo=${JSON.stringify(packetInfo)} messageContents=${messageContents.toString("hex")}`,
             NS,
         );
     }
@@ -5818,21 +5871,22 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * Callback
      * A callback invoked by the EmberZNet stack when a raw MAC message that has
      * matched one of the application's configured MAC filters.
-     * @param filterIndexMatch uint8_t The index of the filter that was matched.
+     * @param filterValueMatch uint16_t The value of the filter that was matched.
+     *   - < v18: uint8_t The index of the filter that was matched.
      * @param legacyPassthroughType The type of MAC passthrough message received.
      * @param packetInfo Information about the incoming packet.
      * @param messageContents uint8_t * The raw message that was received.
      */
     ezspMacFilterMatchMessageHandler(
-        filterIndexMatch: number,
+        filterValueMatch: number,
         legacyPassthroughType: EmberMacPassthroughType,
         packetInfo: EmberRxPacketInfo,
         messageContents: Buffer,
     ): void {
         logger.debug(
             () =>
-                `ezspMacFilterMatchMessageHandler(): callback called with: [filterIndexMatch=${filterIndexMatch}], [legacyPassthroughType=${legacyPassthroughType}], ` +
-                `[packetInfo=${JSON.stringify(packetInfo)}], [messageContents=${messageContents.toString('hex')}]`,
+                `ezspMacFilterMatchMessageHandler: filterValueMatch=${filterValueMatch} legacyPassthroughType=${legacyPassthroughType} ` +
+                `packetInfo=${JSON.stringify(packetInfo)} messageContents=${messageContents.toString("hex")}`,
             NS,
         );
 
@@ -5840,24 +5894,20 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         const msgBuffalo = new EzspBuffalo(messageContents, 0);
 
         const macFrameControl = msgBuffalo.readUInt16() & ~MAC_ACK_REQUIRED;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const sequence = msgBuffalo.readUInt8();
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const destPanId: PanId = msgBuffalo.readUInt16();
-        let destAddress: EUI64 | NodeId;
+        msgBuffalo.readUInt8(); // sequence, unused
+        msgBuffalo.readUInt16(); // destPanId, unused
 
         if (macFrameControl === LONG_DEST_FRAME_CONTROL) {
-            destAddress = msgBuffalo.readIeeeAddr();
+            msgBuffalo.readIeeeAddr(); // destAddress, unused
         } else if (macFrameControl === SHORT_DEST_FRAME_CONTROL) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            destAddress = msgBuffalo.readUInt16();
+            msgBuffalo.readUInt16(); // destAddress, unused
         } else {
             logger.debug(`ezspMacFilterMatchMessageHandler INVALID InterPAN macFrameControl '${macFrameControl}'.`, NS);
             return;
         }
 
         const sourcePanId: PanId = msgBuffalo.readUInt16();
-        const sourceAddress: EUI64 = msgBuffalo.readIeeeAddr();
+        const sourceAddress: Eui64 = msgBuffalo.readIeeeAddr();
 
         // Now that we know the correct MAC length, verify the interpan frame is the correct length.
         let remainingLength = msgBuffalo.getBufferLength() - msgBuffalo.getPosition();
@@ -5886,7 +5936,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         }
 
         const messageType = apsFrameControl & INTERPAN_APS_FRAME_DELIVERY_MODE_MASK;
-        let groupId: number = 0; // XXX: looks fine from z2m code?
+        let groupId = 0; // XXX: looks fine from z2m code?
 
         switch (messageType) {
             case EmberInterpanMessageType.UNICAST:
@@ -5917,7 +5967,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         const payload = msgBuffalo.readRest();
 
         if (profileId === ZSpec.TOUCHLINK_PROFILE_ID && clusterId === Clusters.touchlink.ID) {
-            this.emit('touchlinkMessage', sourcePanId, sourceAddress, groupId, packetInfo.lastHopLqi, payload);
+            this.emit("touchlinkMessage", sourcePanId, sourceAddress, groupId, packetInfo.lastHopLqi, payload);
         }
     }
 
@@ -5931,10 +5981,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * - SLStatus.ZIGBEE_DELIVERY_FAILED if not
      */
     ezspRawTransmitCompleteHandler(messageContents: Buffer, status: SLStatus): void {
-        logger.debug(
-            `ezspRawTransmitCompleteHandler(): callback called with: [messageContents=${messageContents.toString('hex')}], [status=${SLStatus[status]}]`,
-            NS,
-        );
+        logger.debug(`ezspRawTransmitCompleteHandler: messageContents=${messageContents.toString("hex")} status=${SLStatus[status]}`, NS);
     }
 
     /**
@@ -6184,7 +6231,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
          */
         // NOTE: added for good measure
         if (context.coreKeyType === SecManKeyType.INTERNAL) {
-            logger.error(`ezspExportKey cannot use INTERNAL key type.`, NS);
+            logger.error("ezspExportKey cannot use INTERNAL key type.", NS);
             throw new EzspError(EzspStatus.ERROR_INVALID_CALL);
         }
 
@@ -6202,13 +6249,13 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             const status = this.buffalo.readUInt32();
 
             return [status, key];
-        } else {
-            const status = this.buffalo.readUInt32();
-            const key = this.buffalo.readSecManKey();
-            context = this.buffalo.readSecManContext();
-
-            return [status, key];
         }
+
+        const status = this.buffalo.readUInt32();
+        const key = this.buffalo.readSecManKey();
+        context = this.buffalo.readSecManContext();
+
+        return [status, key];
     }
 
     /**
@@ -6257,7 +6304,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
          */
         // NOTE: added for good measure
         if (context.coreKeyType === SecManKeyType.INTERNAL) {
-            logger.error(`ezspImportKey cannot use INTERNAL key type.`, NS);
+            logger.error("ezspImportKey cannot use INTERNAL key type.", NS);
             throw new EzspError(EzspStatus.ERROR_INVALID_CALL);
         }
 
@@ -6285,7 +6332,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param sequenceNumber uint8_t The sequence number of the new network key.
      */
     ezspSwitchNetworkKeyHandler(sequenceNumber: number): void {
-        logger.debug(`ezspSwitchNetworkKeyHandler(): callback called with: [sequenceNumber=${sequenceNumber}]`, NS);
+        logger.debug(`ezspSwitchNetworkKeyHandler: sequenceNumber=${sequenceNumber}`, NS);
     }
 
     /**
@@ -6297,7 +6344,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @returns uint8_t This indicates the index of the entry that matches the search criteria.
      *          A value of 0xFF is returned if not matching entry is found.
      */
-    async ezspFindKeyTableEntry(address: EUI64, linkKey: boolean): Promise<number> {
+    async ezspFindKeyTableEntry(address: Eui64, linkKey: boolean): Promise<number> {
         const sendBuffalo = this.startCommand(EzspFrameID.FIND_KEY_TABLE_ENTRY);
         sendBuffalo.writeIeeeAddr(address);
         sendBuffalo.writeUInt8(linkKey ? 1 : 0);
@@ -6321,7 +6368,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param destinationEui64 The long address of the node to which this command will be sent
      * @returns An SLStatus value indicating success of failure of the operation
      */
-    async ezspSendTrustCenterLinkKey(destinationNodeId: NodeId, destinationEui64: EUI64): Promise<SLStatus> {
+    async ezspSendTrustCenterLinkKey(destinationNodeId: NodeId, destinationEui64: Eui64): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.SEND_TRUST_CENTER_LINK_KEY);
         sendBuffalo.writeUInt16(destinationNodeId);
         sendBuffalo.writeIeeeAddr(destinationEui64);
@@ -6380,7 +6427,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * A function to request a Link Key from the Trust Center with another device on
      * the Network (which could be the Trust Center). A Link Key with the Trust
      * Center is possible but the requesting device cannot be the Trust Center. Link
-     * Keys are optional in ZigBee Standard Security and thus the stack cannot know
+     * Keys are optional in Zigbee Standard Security and thus the stack cannot know
      * whether the other device supports them. If EMBER_REQUEST_KEY_TIMEOUT is
      * non-zero on the Trust Center and the partner device is not the Trust Center,
      * both devices must request keys with their partner device within the time
@@ -6395,7 +6442,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @returns The success or failure of sending the request.
      *          This is not the final result of the attempt. ezspZigbeeKeyEstablishmentHandler(...) will return that.
      */
-    async ezspRequestLinkKey(partner: EUI64): Promise<SLStatus> {
+    async ezspRequestLinkKey(partner: Eui64): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.REQUEST_LINK_KEY);
         sendBuffalo.writeIeeeAddr(partner);
 
@@ -6444,8 +6491,8 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      *        This value is all zeros on a failure.
      * @param status This is the status indicating what was established or why the key establishment failed.
      */
-    ezspZigbeeKeyEstablishmentHandler(partner: EUI64, status: EmberKeyStatus): void {
-        logger.debug(`ezspZigbeeKeyEstablishmentHandler(): callback called with: [partner=${partner}], [status=${EmberKeyStatus[status]}]`, NS);
+    ezspZigbeeKeyEstablishmentHandler(partner: Eui64, status: EmberKeyStatus): void {
+        logger.debug(`ezspZigbeeKeyEstablishmentHandler: partner=${partner} status=${EmberKeyStatus[status]}`, NS);
         // NOTE: For security reasons, any valid `partner` (not wildcard) that return with a status=TC_REQUESTER_VERIFY_KEY_TIMEOUT
         //       are kicked off the network for posing a risk, unless HA devices allowed (as opposed to Z3)
         //       and always if status=TC_REQUESTER_VERIFY_KEY_FAILURE
@@ -6552,13 +6599,13 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             const status = this.buffalo.readUInt32();
 
             return [status, keyData];
-        } else {
-            const status = this.buffalo.readUInt32();
-            const keyData = this.buffalo.readSecManAPSKeyMetadata();
-            context = this.buffalo.readSecManContext();
-
-            return [status, keyData];
         }
+
+        const status = this.buffalo.readUInt32();
+        const keyData = this.buffalo.readSecManAPSKeyMetadata();
+        context = this.buffalo.readSecManContext();
+
+        return [status, keyData];
     }
 
     /**
@@ -6568,7 +6615,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param plaintextKey sl_zb_sec_man_key_t * The key data to be imported.
      * @returns Status of key import operation.
      */
-    async ezspImportLinkKey(index: number, address: EUI64, plaintextKey: SecManKey): Promise<SLStatus> {
+    async ezspImportLinkKey(index: number, address: Eui64, plaintextKey: SecManKey): Promise<SLStatus> {
         /**
          * Import a link key, or SL_ZB_SEC_MAN_KEY_TYPE_APP_LINK key, into storage.
          *
@@ -6637,14 +6684,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             const status = this.buffalo.readUInt32();
 
             return [status, context, plaintextKey, keyData];
-        } else {
-            const status = this.buffalo.readUInt32();
-            const context = this.buffalo.readSecManContext();
-            const plaintextKey = this.buffalo.readSecManKey();
-            const keyData = this.buffalo.readSecManAPSKeyMetadata();
-
-            return [status, context, plaintextKey, keyData];
         }
+
+        const status = this.buffalo.readUInt32();
+        const context = this.buffalo.readSecManContext();
+        const plaintextKey = this.buffalo.readSecManKey();
+        const keyData = this.buffalo.readSecManAPSKeyMetadata();
+
+        return [status, context, plaintextKey, keyData];
     }
 
     /**
@@ -6655,7 +6702,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @returns sl_zigbee_sec_man_context_t * Context referencing the exported key. Contains information like the EUI64 address it is associated with.
      * @returns sl_zb_sec_man_aps_key_metadata_t * Metadata about the key.
      */
-    async ezspExportLinkKeyByEui(eui: EUI64): Promise<[SLStatus, context: SecManContext, plaintextKey: SecManKey, keyData: SecManAPSKeyMetadata]> {
+    async ezspExportLinkKeyByEui(eui: Eui64): Promise<[SLStatus, context: SecManContext, plaintextKey: SecManKey, keyData: SecManAPSKeyMetadata]> {
         /**
          * Search through the Key table to find an entry that has the same EUI address as the passed value.
          * If NULL is passed in for the address then it finds the first unused entry and sets the index in the context.
@@ -6685,14 +6732,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             const status = this.buffalo.readUInt32();
 
             return [status, context, plaintextKey, keyData];
-        } else {
-            const status = this.buffalo.readUInt32();
-            const context = this.buffalo.readSecManContext();
-            const plaintextKey = this.buffalo.readSecManKey();
-            const keyData = this.buffalo.readSecManAPSKeyMetadata();
-
-            return [status, context, plaintextKey, keyData];
         }
+
+        const status = this.buffalo.readUInt32();
+        const context = this.buffalo.readSecManContext();
+        const plaintextKey = this.buffalo.readSecManKey();
+        const keyData = this.buffalo.readSecManAPSKeyMetadata();
+
+        return [status, context, plaintextKey, keyData];
     }
 
     /**
@@ -6731,7 +6778,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param flags sl_zigbee_sec_man_flags_t (unused in v14+) Flags associated with this transient key.
      * @returns Status of key import operation.
      */
-    async ezspImportTransientKey(eui64: EUI64, plaintextKey: SecManKey, flags: SecManFlag = SecManFlag.NONE): Promise<SLStatus> {
+    async ezspImportTransientKey(eui64: Eui64, plaintextKey: SecManKey, flags: SecManFlag = SecManFlag.NONE): Promise<SLStatus> {
         /**
          * @brief Add a transient or temporary key entry to key storage.
          * A key entry added with this API is timed out after
@@ -6787,14 +6834,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             const status = this.buffalo.readUInt32();
 
             return [status, context, plaintextKey, keyData];
-        } else {
-            const status = this.buffalo.readUInt32();
-            const context = this.buffalo.readSecManContext();
-            const plaintextKey = this.buffalo.readSecManKey();
-            const keyData = this.buffalo.readSecManAPSKeyMetadata();
-
-            return [status, context, plaintextKey, keyData];
         }
+
+        const status = this.buffalo.readUInt32();
+        const context = this.buffalo.readSecManContext();
+        const plaintextKey = this.buffalo.readSecManKey();
+        const keyData = this.buffalo.readSecManAPSKeyMetadata();
+
+        return [status, context, plaintextKey, keyData];
     }
 
     /**
@@ -6806,7 +6853,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @returns sl_zb_sec_man_aps_key_metadata_t * Metadata about the key.
      */
     async ezspExportTransientKeyByEui(
-        eui: EUI64,
+        eui: Eui64,
     ): Promise<[SLStatus, context: SecManContext, plaintextKey: SecManKey, key_data: SecManAPSKeyMetadata]> {
         const sendBuffalo = this.startCommand(EzspFrameID.EXPORT_TRANSIENT_KEY_BY_EUI);
         sendBuffalo.writeIeeeAddr(eui);
@@ -6824,14 +6871,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             const status = this.buffalo.readUInt32();
 
             return [status, context, plaintextKey, keyData];
-        } else {
-            const status = this.buffalo.readUInt32();
-            const context = this.buffalo.readSecManContext();
-            const plaintextKey = this.buffalo.readSecManKey();
-            const keyData = this.buffalo.readSecManAPSKeyMetadata();
-
-            return [status, context, plaintextKey, keyData];
         }
+
+        const status = this.buffalo.readUInt32();
+        const context = this.buffalo.readSecManContext();
+        const plaintextKey = this.buffalo.readSecManKey();
+        const keyData = this.buffalo.readSecManAPSKeyMetadata();
+
+        return [status, context, plaintextKey, keyData];
     }
 
     /**
@@ -6867,7 +6914,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         lengthCombinedArg: number,
         message: Buffer,
         apsHeaderEndIndex: number,
-        remoteEui64: EUI64,
+        remoteEui64: Eui64,
     ): Promise<[SLStatus, cryptedMessage: Buffer]> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
@@ -6910,18 +6957,18 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      */
     ezspTrustCenterJoinHandler(
         newNodeId: NodeId,
-        newNodeEui64: EUI64,
+        newNodeEui64: Eui64,
         status: EmberDeviceUpdate,
         policyDecision: EmberJoinDecision,
         parentOfNewNodeId: NodeId,
     ): void {
         logger.debug(
-            `ezspTrustCenterJoinHandler(): callback called with: [newNodeId=${newNodeId}], [newNodeEui64=${newNodeEui64}], ` +
-                `[status=${EmberDeviceUpdate[status]}], [policyDecision=${EmberJoinDecision[policyDecision]}], [parentOfNewNodeId=${parentOfNewNodeId}]`,
+            `ezspTrustCenterJoinHandler: newNodeId=${newNodeId} newNodeEui64=${newNodeEui64} ` +
+                `status=${EmberDeviceUpdate[status]} policyDecision=${EmberJoinDecision[policyDecision]} parentOfNewNodeId=${parentOfNewNodeId}`,
             NS,
         );
         // NOTE: this is mostly just passing stuff up to Z2M, so use only one emit for all, let adapter do the rest, no parsing needed
-        this.emit('trustCenterJoin', newNodeId, newNodeEui64, status, policyDecision, parentOfNewNodeId);
+        this.emit("trustCenterJoin", newNodeId, newNodeEui64, status, policyDecision, parentOfNewNodeId);
     }
 
     /**
@@ -7011,7 +7058,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param targetLong The long address (EUI64) of the device to be removed.
      * @returns An SLStatus value indicating success, or the reason for failure
      */
-    async ezspRemoveDevice(destShort: NodeId, destLong: EUI64, targetLong: EUI64): Promise<SLStatus> {
+    async ezspRemoveDevice(destShort: NodeId, destLong: Eui64, targetLong: Eui64): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.REMOVE_DEVICE);
         sendBuffalo.writeUInt16(destShort);
         sendBuffalo.writeIeeeAddr(destLong);
@@ -7037,7 +7084,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param key EmberKeyData * The NWK key to send to the new device.
      * @returns An SLStatus value indicating success, or the reason for failure
      */
-    async ezspUnicastNwkKeyUpdate(destShort: NodeId, destLong: EUI64, key: EmberKeyData): Promise<SLStatus> {
+    async ezspUnicastNwkKeyUpdate(destShort: NodeId, destLong: Eui64, key: EmberKeyData): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.UNICAST_NWK_KEY_UPDATE);
         sendBuffalo.writeUInt16(destShort);
         sendBuffalo.writeIeeeAddr(destLong);
@@ -7087,10 +7134,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param ephemeralPublicKey EmberPublicKeyData * The generated ephemeral public key.
      */
     ezspGenerateCbkeKeysHandler(status: SLStatus, ephemeralPublicKey: EmberPublicKeyData): void {
-        logger.debug(
-            `ezspGenerateCbkeKeysHandler(): callback called with: [status=${SLStatus[status]}], [ephemeralPublicKey=${ephemeralPublicKey}]`,
-            NS,
-        );
+        logger.debug(`ezspGenerateCbkeKeysHandler: status=${SLStatus[status]} ephemeralPublicKey=${ephemeralPublicKey}`, NS);
     }
 
     /**
@@ -7135,10 +7179,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param responderSmac EmberSmacData * The calculated value of the responder's SMAC
      */
     ezspCalculateSmacsHandler(status: SLStatus, initiatorSmac: EmberSmacData, responderSmac: EmberSmacData): void {
-        logger.debug(
-            `ezspCalculateSmacsHandler(): callback called with: [status=${SLStatus[status]}], [initiatorSmac=${initiatorSmac}], [responderSmac=${responderSmac}]`,
-            NS,
-        );
+        logger.debug(`ezspCalculateSmacsHandler: status=${SLStatus[status]} initiatorSmac=${initiatorSmac} responderSmac=${responderSmac}`, NS);
     }
 
     /**
@@ -7170,10 +7211,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param ephemeralPublicKey EmberPublicKey283k1Data * The generated ephemeral public key.
      */
     ezspGenerateCbkeKeysHandler283k1(status: SLStatus, ephemeralPublicKey: EmberPublicKey283k1Data): void {
-        logger.debug(
-            `ezspGenerateCbkeKeysHandler283k1(): callback called with: [status=${SLStatus[status]}], [ephemeralPublicKey=${ephemeralPublicKey}]`,
-            NS,
-        );
+        logger.debug(`ezspGenerateCbkeKeysHandler283k1(): status=${SLStatus[status]} ephemeralPublicKey=${ephemeralPublicKey}`, NS);
     }
 
     /**
@@ -7220,7 +7258,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      */
     ezspCalculateSmacsHandler283k1(status: SLStatus, initiatorSmac: EmberSmacData, responderSmac: EmberSmacData): void {
         logger.debug(
-            `ezspCalculateSmacsHandler283k1(): callback called with: [status=${SLStatus[status]}], [initiatorSmac=${initiatorSmac}], [responderSmac=${responderSmac}]`,
+            `ezspCalculateSmacsHandler283k1(): status=${SLStatus[status]} initiatorSmac=${initiatorSmac} responderSmac=${responderSmac}`,
             NS,
         );
     }
@@ -7320,10 +7358,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param messageContents uint8_t *The message and attached which includes the original message and the appended signature.
      */
     ezspDsaSignHandler(status: SLStatus, messageContents: Buffer): void {
-        logger.debug(
-            `ezspDsaSignHandler(): callback called with: [status=${SLStatus[status]}], [messageContents=${messageContents.toString('hex')}]`,
-            NS,
-        );
+        logger.debug(`ezspDsaSignHandler: status=${SLStatus[status]} messageContents=${messageContents.toString("hex")}`, NS);
     }
 
     /**
@@ -7363,7 +7398,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param status The result of the DSA verification operation.
      */
     ezspDsaVerifyHandler(status: SLStatus): void {
-        logger.debug(`ezspDsaVerifyHandler(): callback called with: [status=${SLStatus[status]}]`, NS);
+        logger.debug(`ezspDsaVerifyHandler: status=${SLStatus[status]}`, NS);
     }
 
     /**
@@ -7681,10 +7716,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      *        Length will be greater than 3 and less than 123.
      */
     ezspMfglibRxHandler(linkQuality: number, rssi: number, packetContents: Buffer): void {
-        logger.debug(
-            `ezspMfglibRxHandler(): callback called with: [linkQuality=${linkQuality}], [rssi=${rssi}], [packetContents=${packetContents.toString('hex')}]`,
-            NS,
-        );
+        logger.debug(`ezspMfglibRxHandler: linkQuality=${linkQuality} rssi=${rssi} packetContents=${packetContents.toString("hex")}`, NS);
     }
 
     //-----------------------------------------------------------------------------
@@ -7716,14 +7748,14 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     /**
      * Transmits the given bootload message to a neighboring node using a specific
      * 802.15.4 header that allows the EmberZNet stack as well as the bootloader to
-     * recognize the message, but will not interfere with other ZigBee stacks.
+     * recognize the message, but will not interfere with other Zigbee stacks.
      * @param broadcast If true, the destination address and pan id are both set to the broadcast address.
      * @param destEui64 The EUI64 of the target node. Ignored if the broadcast field is set to true.
      * @param messageLength uint8_t The length of the messageContents parameter in bytes.
      * @param messageContents uint8_t * The multicast message.
      * @returns An SLStatus value indicating success or the reason for failure.
      */
-    async ezspSendBootloadMessage(broadcast: boolean, destEui64: EUI64, messageContents: Buffer): Promise<SLStatus> {
+    async ezspSendBootloadMessage(broadcast: boolean, destEui64: Eui64, messageContents: Buffer): Promise<SLStatus> {
         const sendBuffalo = this.startCommand(EzspFrameID.SEND_BOOTLOAD_MESSAGE);
         sendBuffalo.writeUInt8(broadcast ? 1 : 0);
         sendBuffalo.writeIeeeAddr(destEui64);
@@ -7778,10 +7810,10 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param packetInfo Information about the incoming packet.
      * @param messageContents uint8_t *The bootload message that was sent.
      */
-    ezspIncomingBootloadMessageHandler(longId: EUI64, packetInfo: EmberRxPacketInfo, messageContents: Buffer): void {
+    ezspIncomingBootloadMessageHandler(longId: Eui64, packetInfo: EmberRxPacketInfo, messageContents: Buffer): void {
         logger.debug(
             () =>
-                `ezspIncomingBootloadMessageHandler(): callback called with: [longId=${longId}], [packetInfo=${JSON.stringify(packetInfo)}], [messageContents=${messageContents.toString('hex')}]`,
+                `ezspIncomingBootloadMessageHandler: longId=${longId} packetInfo=${JSON.stringify(packetInfo)} messageContents=${messageContents.toString("hex")}`,
             NS,
         );
     }
@@ -7796,10 +7828,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param messageContents uint8_t * The message that was sent.
      */
     ezspBootloadTransmitCompleteHandler(status: SLStatus, messageContents: Buffer): void {
-        logger.debug(
-            `ezspBootloadTransmitCompleteHandler(): callback called with: [status=${SLStatus[status]}], [messageContents=${messageContents.toString('hex')}]`,
-            NS,
-        );
+        logger.debug(`ezspBootloadTransmitCompleteHandler: status=${SLStatus[status]} messageContents=${messageContents.toString("hex")}`, NS);
     }
 
     /**
@@ -7833,10 +7862,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param data uint8_t * A pointer to the data received in the current message.
      */
     ezspIncomingMfgTestMessageHandler(messageType: number, messageContents: Buffer): void {
-        logger.debug(
-            `ezspIncomingMfgTestMessageHandler(): callback called with: [messageType=${messageType}], [messageContents=${messageContents.toString('hex')}]`,
-            NS,
-        );
+        logger.debug(`ezspIncomingMfgTestMessageHandler: messageType=${messageType} messageContents=${messageContents.toString("hex")}`, NS);
     }
 
     /**
@@ -7901,7 +7927,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param newId The 8-byte EUID for the DUT.
      * @returns An SLStatus value indicating success or failure of the command.
      */
-    async ezspMfgTestSendEui64(newId: EUI64): Promise<SLStatus> {
+    async ezspMfgTestSendEui64(newId: Eui64): Promise<SLStatus> {
         if (this.version < 0x0e) {
             throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
         }
@@ -8135,7 +8161,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
     ): void {
         logger.debug(
             () =>
-                `ezspZllNetworkFoundHandler(): callback called with: [networkInfo=${networkInfo}], [isDeviceInfoNull=${isDeviceInfoNull}], [deviceInfo=${deviceInfo}], [packetInfo=${JSON.stringify(packetInfo)}]`,
+                `ezspZllNetworkFoundHandler: networkInfo=${networkInfo} isDeviceInfoNull=${isDeviceInfoNull} deviceInfo=${deviceInfo} packetInfo=${JSON.stringify(packetInfo)}`,
             NS,
         );
     }
@@ -8146,7 +8172,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param status Status of the operation.
      */
     ezspZllScanCompleteHandler(status: SLStatus): void {
-        logger.debug(`ezspZllScanCompleteHandler(): callback called with: [status=${SLStatus[status]}]`, NS);
+        logger.debug(`ezspZllScanCompleteHandler: status=${SLStatus[status]}`, NS);
     }
 
     /**
@@ -8157,10 +8183,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param packetInfo Information about the incoming packet received from this network.
      */
     ezspZllAddressAssignmentHandler(addressInfo: EmberZllAddressAssignment, packetInfo: EmberRxPacketInfo): void {
-        logger.debug(
-            () => `ezspZllAddressAssignmentHandler(): callback called with: [addressInfo=${addressInfo}], [packetInfo=${JSON.stringify(packetInfo)}]`,
-            NS,
-        );
+        logger.debug(() => `ezspZllAddressAssignmentHandler: addressInfo=${addressInfo} packetInfo=${JSON.stringify(packetInfo)}`, NS);
     }
 
     /**
@@ -8169,7 +8192,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param networkInfo EmberZllNetwork * Information about the network.
      */
     ezspZllTouchLinkTargetHandler(networkInfo: EmberZllNetwork): void {
-        logger.debug(`ezspZllTouchLinkTargetHandler(): callback called with: [networkInfo=${networkInfo}]`, NS);
+        logger.debug(`ezspZllTouchLinkTargetHandler: networkInfo=${networkInfo}`, NS);
     }
 
     /**
@@ -8453,7 +8476,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         sinkNetworkAddress: number,
         sinkGroupId: number,
         assignedAlias: number,
-        sinkIeeeAddress: EUI64,
+        sinkIeeeAddress: Eui64,
         gpdKey: EmberKeyData,
         gpdSecurityFrameCounter: number,
         forwardingRadius: number,
@@ -8529,12 +8552,12 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param gpepHandle uint8_t The handle of the GPDF.
      */
     ezspDGpSentHandler(status: SLStatus, gpepHandle: number): void {
-        logger.debug(`ezspDGpSentHandler(): callback called with: [status=${SLStatus[status]}], [gpepHandle=${gpepHandle}]`, NS);
+        logger.debug(`ezspDGpSentHandler: status=${SLStatus[status]} gpepHandle=${gpepHandle}`, NS);
     }
 
     /**
      * Callback
-     * A callback invoked by the ZigBee GP stack when a GPDF is received.
+     * A callback invoked by the Zigbee GP stack when a GPDF is received.
      * @param status The status of the GPDF receive.
      * @param gpdLink uint8_t The gpdLink value of the received GPDF.
      * @param sequenceNumber uint8_t The GPDF sequence number.
@@ -8544,11 +8567,12 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
      * @param autoCommissioning Whether the incoming GPDF had the auto-commissioning bit set.
      * @param bidirectionalInfo uint8_t Bidirectional information represented in bitfields,
      *        where bit0 holds the rxAfterTx of incoming gpdf and bit1 holds if tx queue is available for outgoing gpdf.
-     * @param gpdSecurityFrameCounter uint32_t The security frame counter of the incoming GDPF.
+     * @param gpdSecurityFrameCounter uint32_t The security frame counter of the incoming GPDF.
      * @param gpdCommandId uint8_t The gpdCommandId of the incoming GPDF.
      * @param mic uint32_t The received MIC of the GPDF.
      * @param proxyTableIndex uint8_tThe proxy table index of the corresponding proxy table entry to the incoming GPDF.
      * @param gpdCommandPayload uint8_t * The GPD command payload.
+     * @param packetInfo Rx packet information.
      */
     ezspGpepIncomingMessageHandler(
         status: EmberGPStatus,
@@ -8564,34 +8588,45 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         mic: number,
         proxyTableIndex: number,
         gpdCommandPayload: Buffer,
+        packetInfo: EmberRxPacketInfo,
     ): void {
         logger.debug(
             () =>
-                `ezspGpepIncomingMessageHandler(): callback called with: [status=${EmberGPStatus[status] ?? status}], [gpdLink=${gpdLink}], ` +
-                `[sequenceNumber=${sequenceNumber}], [addr=${JSON.stringify(addr)}], [gpdfSecurityLevel=${EmberGpSecurityLevel[gpdfSecurityLevel]}], ` +
-                `[gpdfSecurityKeyType=${EmberGpKeyType[gpdfSecurityKeyType]}], [autoCommissioning=${autoCommissioning}], ` +
-                `[bidirectionalInfo=${bidirectionalInfo}], [gpdSecurityFrameCounter=${gpdSecurityFrameCounter}], [gpdCommandId=${gpdCommandId}], ` +
-                `[mic=${mic}], [proxyTableIndex=${proxyTableIndex}], [gpdCommandPayload=${gpdCommandPayload.toString('hex')}]`,
+                `ezspGpepIncomingMessageHandler: status=${EmberGPStatus[status] ?? status} gpdLink=${gpdLink} ` +
+                `sequenceNumber=${sequenceNumber} addr=${JSON.stringify(addr)} gpdfSecurityLevel=${EmberGpSecurityLevel[gpdfSecurityLevel]} ` +
+                `gpdfSecurityKeyType=${EmberGpKeyType[gpdfSecurityKeyType]} autoCommissioning=${autoCommissioning} ` +
+                `bidirectionalInfo=${bidirectionalInfo} gpdSecurityFrameCounter=${gpdSecurityFrameCounter} gpdCommandId=${gpdCommandId} ` +
+                `mic=${mic} proxyTableIndex=${proxyTableIndex} gpdCommandPayload=${gpdCommandPayload.toString("hex")} packetInfo=${JSON.stringify(packetInfo)}`,
             NS,
         );
 
         if (addr.applicationId === EmberGpApplicationId.IEEE_ADDRESS) {
             // XXX: don't bother parsing for upstream for now, since it will be rejected
-            logger.error(`<=x= [GP] Received IEEE address type in message. Support not implemented upstream. Dropping.`, NS);
+            logger.error("<=x= [GP] Received IEEE address type in message. Support not implemented upstream. Dropping.", NS);
             return;
         }
 
         let commandIdentifier = Clusters.greenPower.commands.notification.ID;
+        let options = 0;
+        const isCommissioning = gpdCommandId === 0xe0;
 
-        if (gpdCommandId === 0xe0) {
+        if (isCommissioning) {
             if (!gpdCommandPayload.length) {
                 // XXX: seem to be receiving duplicate commissioningNotification from some devices, second one with empty payload?
                 //      this will mess with the process no doubt, so dropping them
-                logger.debug(`<=x= [GP] Received commissioning notification with empty payload. Dropping.`, NS);
+                logger.debug("<=x= [GP] Received commissioning notification with empty payload. Dropping.", NS);
                 return;
             }
 
             commandIdentifier = Clusters.greenPower.commands.commissioningNotification.ID;
+            options =
+                (addr.applicationId & 0x7) | ((bidirectionalInfo & 0x1) << 3) | ((gpdfSecurityLevel & 0x3) << 4) | ((gpdfSecurityKeyType & 0x7) << 6);
+        } else {
+            options =
+                (addr.applicationId & 0x7) |
+                ((gpdfSecurityLevel & 0x3) << 6) |
+                ((gpdfSecurityKeyType & 0x7) << 8) |
+                ((bidirectionalInfo & 0x1) << 11);
         }
 
         const apsFrame: EmberApsFrame = {
@@ -8604,22 +8639,20 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             sequence: 0, // not used
         };
         // this stuff is already parsed by EmberZNet stack, but Z2M expects the full buffer, so combine it back
-        const gpdHeader = Buffer.alloc(15); // addr.applicationId === EmberGpApplicationId.IEEE_ADDRESS ? 20 : 15
-        gpdHeader.writeUInt8(0b00000001, 0); // frameControl: FrameType.SPECIFIC + Direction.CLIENT_TO_SERVER + disableDefaultResponse=false
-        gpdHeader.writeUInt8(sequenceNumber, 1);
-        gpdHeader.writeUInt8(commandIdentifier, 2); // commandIdentifier
-        gpdHeader.writeUInt16LE(0, 3); // options, only srcID present
-        gpdHeader.writeUInt32LE(addr.sourceId, 5);
-        // omitted: gpdIEEEAddr (ieeeAddr)
-        // omitted: gpdEndpoint (uint8)
-        gpdHeader.writeUInt32LE(gpdSecurityFrameCounter, 9);
-        gpdHeader.writeUInt8(gpdCommandId, 13);
-        gpdHeader.writeUInt8(gpdCommandPayload.length, 14);
+        let offset = 0;
+        const messageContents = Buffer.alloc(15 + gpdCommandPayload.length);
+        offset = messageContents.writeUInt8(0b00000001, offset); // frameControl: FrameType.SPECIFIC + Direction.CLIENT_TO_SERVER + disableDefaultResponse=false
+        offset = messageContents.writeUInt8(sequenceNumber, offset);
+        offset = messageContents.writeUInt8(commandIdentifier, offset); // commandIdentifier
+        offset = messageContents.writeUInt16LE(options, offset);
+        offset = messageContents.writeUInt32LE(addr.sourceId, offset);
+        offset = messageContents.writeUInt32LE(gpdSecurityFrameCounter, offset);
+        offset = messageContents.writeUInt8(gpdCommandId, offset);
+        offset = messageContents.writeUInt8(gpdCommandPayload.length, offset);
+        offset = gpdCommandPayload.copy(messageContents, offset);
 
-        const messageContents = Buffer.concat([gpdHeader, gpdCommandPayload]); // omitted: gppNwkAddr (uint16), gppGddLink (uint8)
-
-        // XXX: BROADCAST currently hardcoded to match upstream codepath
-        this.emit('incomingMessage', EmberIncomingMessageType.BROADCAST, apsFrame, gpdLink, addr.sourceId & 0xffff, messageContents);
+        // upstream will use COORDINATOR_ADDRESS if GPP not present
+        this.emit("incomingMessage", EmberIncomingMessageType.UNICAST, apsFrame, packetInfo.lastHopLqi, addr.sourceId & 0xffff, messageContents);
     }
 
     /**
@@ -8662,6 +8695,41 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
         const index = this.buffalo.readUInt8();
 
         return index;
+    }
+
+    /**
+     * Removes the proxy table entry stored at the passed index.
+     * @param proxyIndex The index of the requested proxy table entry.
+     */
+    async ezspGpProxyTableRemoveEntry(proxyIndex: number): Promise<void> {
+        if (this.version < 0x11) {
+            throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
+        }
+
+        const sendBuffalo = this.startCommand(EzspFrameID.GP_PROXY_TABLE_REMOVE_ENTRY);
+        sendBuffalo.writeUInt8(proxyIndex);
+
+        const sendStatus = await this.sendCommand(sendBuffalo);
+
+        if (sendStatus !== EzspStatus.SUCCESS) {
+            throw new EzspError(sendStatus);
+        }
+    }
+
+    /**
+     * Clear the entire proxy table
+     */
+    async ezspGpClearProxyTable(): Promise<void> {
+        if (this.version < 0x11) {
+            throw new EzspError(EzspStatus.ERROR_INVALID_FRAME_ID);
+        }
+
+        const sendBuffalo = this.startCommand(EzspFrameID.GP_CLEAR_PROXY_TABLE);
+        const sendStatus = await this.sendCommand(sendBuffalo);
+
+        if (sendStatus !== EzspStatus.SUCCESS) {
+            throw new EzspError(sendStatus);
+        }
     }
 
     /**
@@ -8869,7 +8937,8 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
 
     /**
      * Gets the total number of tokens.
-     * @returns uint8_t Total number of tokens.
+     * @returns uint32_t Total number of tokens.
+     *   - < v18: uint8_t
      */
     async ezspGetTokenCount(): Promise<number> {
         const sendBuffalo = this.startCommand(EzspFrameID.GET_TOKEN_COUNT);
@@ -8880,7 +8949,7 @@ export class Ezsp extends EventEmitter<EmberEzspEventMap> {
             throw new EzspError(sendStatus);
         }
 
-        const count = this.buffalo.readUInt8();
+        const count = this.version < 0x12 ? this.buffalo.readUInt8() : this.buffalo.readUInt32();
 
         return count;
     }

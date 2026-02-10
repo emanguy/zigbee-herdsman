@@ -1,64 +1,52 @@
-import {FrameControl} from '../zspec/zcl/definition/tstype';
-import {Device, Endpoint} from './model';
-import {KeyValue} from './tstype';
+import type {FrameControl} from "../zspec/zcl/definition/tstype";
+import type {Device, Endpoint} from "./model";
+import type {KeyValue} from "./tstype";
 
-interface DeviceJoinedPayload {
+export interface DeviceJoinedPayload {
     device: Device;
 }
 
-interface DeviceInterviewPayload {
-    status: 'started' | 'successful' | 'failed';
+export interface DeviceInterviewPayload {
+    status: "started" | "successful" | "failed";
     device: Device;
 }
 
-interface DeviceNetworkAddressChangedPayload {
+export interface DeviceNetworkAddressChangedPayload {
     device: Device;
 }
 
-interface DeviceAnnouncePayload {
+export interface DeviceAnnouncePayload {
     device: Device;
 }
 
-interface DeviceLeavePayload {
+export interface DeviceLeavePayload {
     ieeeAddr: string;
 }
 
-interface PermitJoinChangedPayload {
+export interface PermitJoinChangedPayload {
     permitted: boolean;
-    reason: 'timer_expired' | 'manual';
-    timeout?: number;
+    time?: number;
 }
 
-interface LastSeenChangedPayload {
+export interface LastSeenChangedPayload {
     device: Device;
-    reason: 'deviceAnnounce' | 'networkAddress' | 'deviceJoined' | 'messageEmitted' | 'messageNonEmitted';
+    reason: "deviceAnnounce" | "networkAddress" | "deviceJoined" | "messageEmitted" | "messageNonEmitted";
 }
 
-type MessagePayloadType = 'attributeReport' | 'readResponse' | 'raw' | 'read' | 'write' | `command${string}`;
+export type MessagePayloadType = "attributeReport" | "readResponse" | "raw" | "read" | "write" | `command${string}`;
 
-interface MessagePayload {
+export interface MessagePayload {
     type: MessagePayloadType;
     device: Device;
     endpoint: Endpoint;
     linkquality: number;
     groupID: number;
     cluster: string | number;
-    data: KeyValue | Array<string | number>;
+    data: KeyValue | Array<string | number> | Buffer;
     meta: {
         zclTransactionSequenceNumber?: number;
         manufacturerCode?: number;
         frameControl?: FrameControl;
+        rawData: Buffer;
     };
 }
-
-export {
-    MessagePayload,
-    MessagePayloadType,
-    DeviceInterviewPayload,
-    DeviceAnnouncePayload,
-    DeviceLeavePayload,
-    DeviceJoinedPayload,
-    PermitJoinChangedPayload,
-    DeviceNetworkAddressChangedPayload,
-    LastSeenChangedPayload,
-};

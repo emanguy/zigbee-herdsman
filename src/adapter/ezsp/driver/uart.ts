@@ -1,19 +1,18 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import {EventEmitter} from 'events';
-import net from 'net';
+import {EventEmitter} from "node:events";
+import net from "node:net";
+import {Waitress, wait} from "../../../utils";
+import {AsyncMutex} from "../../../utils/async-mutex";
+import {logger} from "../../../utils/logger";
+import {SerialPort} from "../../serialPort";
+import type {SerialPortOptions} from "../../tstype";
+import {isTcpPath, parseTcpPath} from "../../utils";
+import {FrameType, Frame as NpiFrame} from "./frame";
+import {Parser} from "./parser";
+import {Writer} from "./writer";
 
-import {Queue, Wait, Waitress} from '../../../utils';
-import {logger} from '../../../utils/logger';
-import wait from '../../../utils/wait';
-import {SerialPort} from '../../serialPort';
-import SocketPortUtils from '../../socketPortUtils';
-import {SerialPortOptions} from '../../tstype';
-import {FrameType, Frame as NpiFrame} from './frame';
-import {Parser} from './parser';
-import {Writer} from './writer';
-
-const NS = 'zh:ezsp:uart';
+const NS = "zh:ezsp:uart";
 
 enum NcpResetCode {
     RESET_UNKNOWN_REASON = 0x00,
@@ -46,21 +45,24 @@ export class SerialDriver extends EventEmitter {
     private ackSeq = 0; // next number after the last accepted frame
     private rejectCondition = false;
     private waitress: Waitress<EZSPPacket, EZSPPacketMatcher>;
-    private queue: Queue;
+    private queue: AsyncMutex;
 
     constructor() {
         super();
         this.initialized = false;
-        this.queue = new Queue(1);
+        this.queue = new AsyncMutex();
         this.waitress = new Waitress<EZSPPacket, EZSPPacketMatcher>(this.waitressValidator, this.waitressTimeoutFormatter);
         this.writer = new Writer();
         this.parser = new Parser();
     }
 
     async connect(options: SerialPortOptions): Promise<void> {
-        if (SocketPortUtils.isTcpPath(options.path!)) {
+        // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+        if (isTcpPath(options.path!)) {
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             await this.openSocketPort(options.path!);
         } else {
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             await this.openSerialPort(options.path!, options.baudRate!, options.rtscts!);
         }
     }
@@ -68,10 +70,10 @@ export class SerialDriver extends EventEmitter {
     private async openSerialPort(path: string, baudRate: number, rtscts: boolean): Promise<void> {
         const options = {
             path,
-            baudRate: typeof baudRate === 'number' ? baudRate : 115200,
-            rtscts: typeof rtscts === 'boolean' ? rtscts : false,
+            baudRate: typeof baudRate === "number" ? baudRate : 115200,
+            rtscts: typeof rtscts === "boolean" ? rtscts : false,
             autoOpen: false,
-            parity: 'none',
+            parity: "none",
             stopBits: 1,
             xon: false,
             xoff: false,
@@ -79,27 +81,26 @@ export class SerialDriver extends EventEmitter {
 
         // enable software flow control if RTS/CTS not enabled in config
         if (!options.rtscts) {
-            logger.debug(`RTS/CTS config is off, enabling software flow control.`, NS);
+            logger.debug("RTS/CTS config is off, enabling software flow control.", NS);
             options.xon = true;
             options.xoff = true;
         }
 
-        logger.debug(`Opening SerialPort with ${JSON.stringify(options)}`, NS);
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
+        logger.debug(() => `Opening SerialPort with ${JSON.stringify(options)}`, NS);
+        // @ts-expect-error
         this.serialPort = new SerialPort(options);
 
         this.writer.pipe(this.serialPort);
 
         this.serialPort.pipe(this.parser);
-        this.parser.on('parsed', this.onParsed.bind(this));
+        this.parser.on("parsed", this.onParsed.bind(this));
 
         try {
             await this.serialPort.asyncOpen();
-            logger.debug('Serialport opened', NS);
+            logger.debug("Serialport opened", NS);
 
-            this.serialPort.once('close', this.onPortClose.bind(this));
-            this.serialPort.on('error', this.onPortError.bind(this));
+            this.serialPort.once("close", this.onPortClose.bind(this));
+            this.serialPort.on("error", this.onPortError.bind(this));
 
             // reset
             await this.reset();
@@ -117,7 +118,7 @@ export class SerialDriver extends EventEmitter {
     }
 
     private async openSocketPort(path: string): Promise<void> {
-        const info = SocketPortUtils.parseTcpPath(path);
+        const info = parseTcpPath(path);
         logger.debug(`Opening TCP socket with ${info.host}:${info.port}`, NS);
 
         this.socketPort = new net.Socket();
@@ -127,7 +128,7 @@ export class SerialDriver extends EventEmitter {
         this.writer.pipe(this.socketPort);
 
         this.socketPort.pipe(this.parser);
-        this.parser.on('parsed', this.onParsed.bind(this));
+        this.parser.on("parsed", this.onParsed.bind(this));
 
         return await new Promise((resolve, reject): void => {
             const openError = (err: Error): void => {
@@ -136,14 +137,19 @@ export class SerialDriver extends EventEmitter {
                 reject(err);
             };
 
-            this.socketPort!.on('connect', () => {
-                logger.debug('Socket connected', NS);
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+            this.socketPort!.on("connect", () => {
+                logger.debug("Socket connected", NS);
             });
-            this.socketPort!.on('ready', async (): Promise<void> => {
-                logger.debug('Socket ready', NS);
-                this.socketPort!.removeListener('error', openError);
-                this.socketPort!.once('close', this.onPortClose.bind(this));
-                this.socketPort!.on('error', this.onPortError.bind(this));
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+            this.socketPort!.on("ready", async (): Promise<void> => {
+                logger.debug("Socket ready", NS);
+                // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+                this.socketPort!.removeListener("error", openError);
+                // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+                this.socketPort!.once("close", this.onPortClose.bind(this));
+                // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+                this.socketPort!.on("error", this.onPortError.bind(this));
 
                 // reset
                 await this.reset();
@@ -152,8 +158,10 @@ export class SerialDriver extends EventEmitter {
 
                 resolve();
             });
-            this.socketPort!.once('error', openError);
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+            this.socketPort!.once("error", openError);
 
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             this.socketPort!.connect(info.port, info.host);
         });
     }
@@ -190,6 +198,7 @@ export class SerialDriver extends EventEmitter {
         } catch (error) {
             this.rejectCondition = true;
             logger.error(`Error while parsing to NpiFrame '${error}'`, NS);
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             logger.debug((error as Error).stack!, NS);
         }
 
@@ -209,7 +218,7 @@ export class SerialDriver extends EventEmitter {
 
         // Expected package {recvSeq}, but received {frmNum}
         // This happens when the chip sends us a reTx packet, but we are waiting for the next one
-        if (this.recvSeq != frmNum) {
+        if (this.recvSeq !== frmNum) {
             if (reTx) {
                 // if the reTx flag is set, then this is a packet replay
                 logger.debug(`Unexpected DATA packet sequence ${frmNum} | ${this.recvSeq}: packet replay`, NS);
@@ -241,7 +250,7 @@ export class SerialDriver extends EventEmitter {
 
         const data = frame.buffer.subarray(1, -3);
 
-        this.emit('received', NpiFrame.makeRandomizedBuffer(data));
+        this.emit("received", NpiFrame.makeRandomizedBuffer(data));
     }
 
     private handleACK(frame: NpiFrame): boolean {
@@ -269,7 +278,7 @@ export class SerialDriver extends EventEmitter {
 
         logger.debug(`<-- NAK (${nakNum}): ${frame}`, NS);
 
-        const handled = this.waitress.reject({sequence: nakNum}, 'Recv NAK frame');
+        const handled = this.waitress.reject({sequence: nakNum}, "Recv NAK frame");
 
         if (!handled) {
             // send NAK
@@ -285,7 +294,7 @@ export class SerialDriver extends EventEmitter {
 
     private handleRSTACK(frame: NpiFrame): void {
         /* Reset acknowledgement frame receive handler */
-        let code;
+        let code: string | number;
         this.rejectCondition = false;
 
         logger.debug(`<-- RSTACK ${frame}`, NS);
@@ -317,28 +326,28 @@ export class SerialDriver extends EventEmitter {
     }
 
     async reset(): Promise<void> {
-        logger.debug('Uart reseting', NS);
+        logger.debug("Uart reseting", NS);
         this.parser.reset();
         this.queue.clear();
         this.sendSeq = 0;
         this.recvSeq = 0;
 
-        return await this.queue.execute<void>(async (): Promise<void> => {
+        return await this.queue.run<void>(async (): Promise<void> => {
             try {
-                logger.debug(`--> Write reset`, NS);
+                logger.debug("--> Write reset", NS);
                 const waiter = this.waitFor(-1, 10000);
                 this.rejectCondition = false;
 
                 this.writer.sendReset();
-                logger.debug(`-?- waiting reset`, NS);
+                logger.debug("-?- waiting reset", NS);
                 await waiter.start().promise;
-                logger.debug(`-+- waiting reset success`, NS);
+                logger.debug("-+- waiting reset success", NS);
 
                 await wait(2000);
             } catch (e) {
                 logger.error(`--> Error: ${e}`, NS);
 
-                this.emit('reset');
+                this.emit("reset");
 
                 throw new Error(`Reset error: ${e}`);
             }
@@ -346,7 +355,7 @@ export class SerialDriver extends EventEmitter {
     }
 
     public async close(emitClose: boolean): Promise<void> {
-        logger.debug('Closing UART', NS);
+        logger.debug("Closing UART", NS);
         this.queue.clear();
 
         if (this.initialized) {
@@ -357,18 +366,19 @@ export class SerialDriver extends EventEmitter {
                     await this.serialPort.asyncFlushAndClose();
                 } catch (error) {
                     if (emitClose) {
-                        this.emit('close');
+                        this.emit("close");
                     }
 
                     throw error;
                 }
             } else {
+                // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
                 this.socketPort!.destroy();
             }
         }
 
         if (emitClose) {
-            this.emit('close');
+            this.emit("close");
         }
     }
 
@@ -383,10 +393,10 @@ export class SerialDriver extends EventEmitter {
         //           net.Socket passes a boolean (in case of a transmission error)
         // try to reset instead of failing immediately
         if (err != null && err !== false) {
-            this.emit('reset');
+            this.emit("reset");
         } else {
             this.initialized = false;
-            this.emit('close');
+            this.emit("close");
         }
     }
 
@@ -400,12 +410,12 @@ export class SerialDriver extends EventEmitter {
         const nextSeq = this.sendSeq;
         const ackSeq = this.recvSeq;
 
-        return await this.queue.execute<void>(async (): Promise<void> => {
+        return await this.queue.run<void>(async (): Promise<void> => {
             const randData = NpiFrame.makeRandomizedBuffer(data);
 
             try {
                 const waiter = this.waitFor(nextSeq);
-                logger.debug(`--> DATA (${seq},${ackSeq},0): ${data.toString('hex')}`, NS);
+                logger.debug(`--> DATA (${seq},${ackSeq},0): ${data.toString("hex")}`, NS);
                 this.writer.sendData(randData, seq, 0, ackSeq);
                 logger.debug(`-?- waiting (${nextSeq})`, NS);
                 await waiter.start().promise;
@@ -413,12 +423,12 @@ export class SerialDriver extends EventEmitter {
             } catch (e1) {
                 logger.error(`--> Error: ${e1}`, NS);
                 logger.error(`-!- break waiting (${nextSeq})`, NS);
-                logger.error(`Can't send DATA frame (${seq},${ackSeq},0): ${data.toString('hex')}`, NS);
+                logger.error(`Can't send DATA frame (${seq},${ackSeq},0): ${data.toString("hex")}`, NS);
 
                 try {
-                    await Wait(500);
+                    await wait(500);
                     const waiter = this.waitFor(nextSeq);
-                    logger.debug(`->> DATA (${seq},${ackSeq},1): ${data.toString('hex')}`, NS);
+                    logger.debug(`->> DATA (${seq},${ackSeq},1): ${data.toString("hex")}`, NS);
                     this.writer.sendData(randData, seq, 1, ackSeq);
                     logger.debug(`-?- rewaiting (${nextSeq})`, NS);
                     await waiter.start().promise;
@@ -426,9 +436,9 @@ export class SerialDriver extends EventEmitter {
                 } catch (e2) {
                     logger.error(`--> Error: ${e2}`, NS);
                     logger.error(`-!- break rewaiting (${nextSeq})`, NS);
-                    logger.error(`Can't resend DATA frame (${seq},${ackSeq},1): ${data.toString('hex')}`, NS);
+                    logger.error(`Can't resend DATA frame (${seq},${ackSeq},1): ${data.toString("hex")}`, NS);
                     if (this.initialized) {
-                        this.emit('reset');
+                        this.emit("reset");
                     }
                     throw new Error(`sendDATA error: try 1: ${e1}, try 2: ${e2}`);
                 }

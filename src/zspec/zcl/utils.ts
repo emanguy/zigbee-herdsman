@@ -1,7 +1,8 @@
-import {Clusters} from './definition/cluster';
-import {DataType, DataTypeClass} from './definition/enums';
-import {Foundation, FoundationCommandName, FoundationDefinition} from './definition/foundation';
-import {Attribute, Cluster, ClusterDefinition, ClusterName, Command, CustomClusters} from './definition/tstype';
+import {Clusters} from "./definition/cluster";
+import {ZCL_TYPE_INVALID_BY_TYPE} from "./definition/datatypes";
+import {DataType, DataTypeClass} from "./definition/enums";
+import {Foundation, type FoundationCommandName, type FoundationDefinition} from "./definition/foundation";
+import type {Attribute, Cluster, ClusterDefinition, ClusterName, Command, CustomClusters, Parameter} from "./definition/tstype";
 
 const DATA_TYPE_CLASS_DISCRETE = [
     DataType.DATA8,
@@ -67,49 +68,103 @@ const FOUNDATION_DISCOVER_RSP_IDS = [
     Foundation.discoverExtRsp.ID,
 ];
 
+/** Runtime fast lookup */
+const ZCL_CLUSTERS_ID_TO_NAMES = (() => {
+    const map = new Map<number, string[]>();
+
+    for (const clusterName in Clusters) {
+        const cluster = Clusters[clusterName as ClusterName];
+
+        const mapEntry = map.get(cluster.ID);
+
+        if (mapEntry) {
+            mapEntry.push(clusterName);
+        } else {
+            map.set(cluster.ID, [clusterName]);
+        }
+    }
+
+    return map;
+})();
+
 export function getDataTypeClass(dataType: DataType): DataTypeClass {
     if (DATA_TYPE_CLASS_DISCRETE.includes(dataType)) {
         return DataTypeClass.DISCRETE;
-    } else if (DATA_TYPE_CLASS_ANALOG.includes(dataType)) {
-        return DataTypeClass.ANALOG;
-    } else {
-        throw new Error(`Don't know value type for '${DataType[dataType]}'`);
     }
+
+    if (DATA_TYPE_CLASS_ANALOG.includes(dataType)) {
+        return DataTypeClass.ANALOG;
+    }
+
+    throw new Error(`Don't know value type for '${DataType[dataType]}'`);
 }
 
 function hasCustomClusters(customClusters: CustomClusters): boolean {
     // XXX: was there a good reason to not set the parameter `customClusters` optional? it would allow simple undefined check
     // below is twice faster than checking `Object.keys(customClusters).length`
-    for (const k in customClusters) return true;
+    for (const _k in customClusters) return true;
     return false;
 }
 
+/**
+ * This can be greatly optimized when `clusters==ZCL` once these have been moved out of ZH (can just use fast lookup <id, name>):
+ * - 'manuSpecificPhilips', 'manuSpecificAssaDoorLock'
+ * - 'elkoSwitchConfigurationClusterServer', 'manuSpecificSchneiderLightSwitchConfiguration'
+ */
 function findClusterNameByID(
     id: number,
     manufacturerCode: number | undefined,
-    clusters: CustomClusters,
+    clusters: typeof Clusters | CustomClusters,
+    zcl: boolean,
 ): [name: string | undefined, partialMatch: boolean] {
     let name: string | undefined;
     // if manufacturer code is given, consider partial match if didn't match against manufacturer code
     let partialMatch = Boolean(manufacturerCode);
 
-    for (const clusterName in clusters) {
-        const cluster = clusters[clusterName as ClusterName];
+    if (zcl) {
+        const zclNames = ZCL_CLUSTERS_ID_TO_NAMES.get(id);
 
-        if (cluster.ID === id) {
-            // priority on first match when matching only ID
-            /* istanbul ignore else */
-            if (name == undefined) {
-                name = clusterName;
+        if (zclNames) {
+            for (const zclName of zclNames) {
+                const cluster = clusters[zclName as ClusterName];
+
+                // priority on first match when matching only ID
+                if (name === undefined) {
+                    name = zclName;
+                }
+
+                if (manufacturerCode && cluster.manufacturerCode === manufacturerCode) {
+                    name = zclName;
+                    partialMatch = false;
+                    break;
+                }
+
+                if (!cluster.manufacturerCode) {
+                    name = zclName;
+                    break;
+                }
             }
+        }
+    } else {
+        for (const clusterName in clusters) {
+            const cluster = clusters[clusterName as ClusterName];
 
-            if (manufacturerCode && cluster.manufacturerCode === manufacturerCode) {
-                name = clusterName;
-                partialMatch = false;
-                break;
-            } else if (!cluster.manufacturerCode) {
-                name = clusterName;
-                break;
+            if (cluster.ID === id) {
+                // priority on first match when matching only ID
+                if (name === undefined) {
+                    name = clusterName;
+                }
+
+                if (manufacturerCode && cluster.manufacturerCode === manufacturerCode) {
+                    name = clusterName;
+                    partialMatch = false;
+                    break;
+                }
+
+                if (!cluster.manufacturerCode) {
+                    name = clusterName;
+                    break;
+                }
             }
         }
     }
@@ -124,17 +179,17 @@ function getClusterDefinition(
 ): {name: string; cluster: ClusterDefinition} {
     let name: string | undefined;
 
-    if (typeof key === 'number') {
+    if (typeof key === "number") {
         let partialMatch: boolean;
 
         // custom clusters have priority over Zcl clusters, except in case of better match (see below)
-        [name, partialMatch] = findClusterNameByID(key, manufacturerCode, customClusters);
+        [name, partialMatch] = findClusterNameByID(key, manufacturerCode, customClusters, false);
 
         if (!name) {
-            [name, partialMatch] = findClusterNameByID(key, manufacturerCode, Clusters);
+            [name, partialMatch] = findClusterNameByID(key, manufacturerCode, Clusters, true);
         } else if (partialMatch) {
             let zclName: string | undefined;
-            [zclName, partialMatch] = findClusterNameByID(key, manufacturerCode, Clusters);
+            [zclName, partialMatch] = findClusterNameByID(key, manufacturerCode, Clusters, true);
 
             // Zcl clusters contain a better match, use that one
             if (zclName !== undefined && !partialMatch) {
@@ -153,8 +208,8 @@ function getClusterDefinition(
               }
             : Clusters[name as ClusterName];
 
-    if (!cluster) {
-        if (typeof key === 'number') {
+    if (!cluster || cluster.ID === undefined) {
+        if (typeof key === "number") {
             name = key.toString();
             cluster = {attributes: {}, commands: {}, commandsResponse: {}, manufacturerCode: undefined, ID: key};
         } else {
@@ -169,16 +224,23 @@ function getClusterDefinition(
     return {name, cluster};
 }
 
-function createCluster(name: string, cluster: ClusterDefinition, manufacturerCode?: number): Cluster {
-    const attributes: {[s: string]: Attribute} = Object.assign({}, ...Object.entries(cluster.attributes).map(([k, v]) => ({[k]: {...v, name: k}})));
-    const commands: {[s: string]: Command} = Object.assign({}, ...Object.entries(cluster.commands).map(([k, v]) => ({[k]: {...v, name: k}})));
-    const commandsResponse: {[s: string]: Command} = Object.assign(
-        {},
-        ...Object.entries(cluster.commandsResponse).map(([k, v]) => ({[k]: {...v, name: k}})),
-    );
+function cloneClusterEntriesWithName<T extends Record<string, unknown>>(entries: Record<string, T>): Record<string, {name: string} & T> {
+    const clone: Record<string, {name: string} & T> = {};
 
-    const getAttributeInternal = (key: number | string): Attribute | undefined => {
-        if (typeof key === 'number') {
+    for (const key in entries) {
+        clone[key] = {...entries[key], name: key};
+    }
+
+    return clone;
+}
+
+function createCluster(name: string, cluster: ClusterDefinition, manufacturerCode?: number): Cluster {
+    const attributes: Record<string, Attribute> = cloneClusterEntriesWithName(cluster.attributes);
+    const commands: Record<string, Command> = cloneClusterEntriesWithName(cluster.commands);
+    const commandsResponse: Record<string, Command> = cloneClusterEntriesWithName(cluster.commandsResponse);
+
+    const getAttribute = (key: number | string): Attribute | undefined => {
+        if (typeof key === "number") {
             let partialMatchAttr: Attribute | undefined;
 
             for (const attrKey in attributes) {
@@ -189,42 +251,20 @@ function createCluster(name: string, cluster: ClusterDefinition, manufacturerCod
                         return attr;
                     }
 
-                    if (attr.manufacturerCode == undefined) {
+                    if (attr.manufacturerCode === undefined) {
                         partialMatchAttr = attr;
                     }
                 }
             }
 
             return partialMatchAttr;
-        } else {
-            for (const attrKey in attributes) {
-                const attr = attributes[attrKey];
-
-                if (attr.name === key) {
-                    return attr;
-                }
-            }
         }
 
-        return undefined;
-    };
-
-    const getAttribute = (key: number | string): Attribute => {
-        const result = getAttributeInternal(key);
-        if (!result) {
-            throw new Error(`Cluster '${name}' has no attribute '${key}'`);
-        }
-
-        return result;
-    };
-
-    const hasAttribute = (key: number | string): boolean => {
-        const result = getAttributeInternal(key);
-        return !!result;
+        return attributes[key];
     };
 
     const getCommand = (key: number | string): Command => {
-        if (typeof key === 'number') {
+        if (typeof key === "number") {
             for (const cmdKey in commands) {
                 const cmd = commands[cmdKey];
 
@@ -233,12 +273,10 @@ function createCluster(name: string, cluster: ClusterDefinition, manufacturerCod
                 }
             }
         } else {
-            for (const cmdKey in commands) {
-                const cmd = commands[cmdKey];
+            const cmd = commands[key];
 
-                if (cmd.name === key) {
-                    return cmd;
-                }
+            if (cmd) {
+                return cmd;
             }
         }
 
@@ -246,7 +284,7 @@ function createCluster(name: string, cluster: ClusterDefinition, manufacturerCod
     };
 
     const getCommandResponse = (key: number | string): Command => {
-        if (typeof key === 'number') {
+        if (typeof key === "number") {
             for (const cmdKey in commandsResponse) {
                 const cmd = commandsResponse[cmdKey];
 
@@ -255,12 +293,10 @@ function createCluster(name: string, cluster: ClusterDefinition, manufacturerCod
                 }
             }
         } else {
-            for (const cmdKey in commandsResponse) {
-                const cmd = commandsResponse[cmdKey];
+            const cmd = commandsResponse[key];
 
-                if (cmd.name === key) {
-                    return cmd;
-                }
+            if (cmd) {
+                return cmd;
             }
         }
 
@@ -275,13 +311,12 @@ function createCluster(name: string, cluster: ClusterDefinition, manufacturerCod
         commands,
         commandsResponse,
         getAttribute,
-        hasAttribute,
         getCommand,
         getCommandResponse,
     };
 }
 
-export function getCluster(key: string | number, manufacturerCode: number | undefined, customClusters: CustomClusters): Cluster {
+export function getCluster(key: string | number, manufacturerCode: number | undefined = undefined, customClusters: CustomClusters = {}): Cluster {
     const {name, cluster} = getClusterDefinition(key, manufacturerCode, customClusters);
     return createCluster(name, cluster, manufacturerCode);
 }
@@ -297,7 +332,7 @@ function getGlobalCommandNameById(id: number): FoundationCommandName {
 }
 
 export function getGlobalCommand(key: number | string): Command {
-    const name = typeof key === 'number' ? getGlobalCommandNameById(key) : (key as FoundationCommandName);
+    const name = typeof key === "number" ? getGlobalCommandNameById(key) : (key as FoundationCommandName);
     const command = Foundation[name];
 
     if (!command) {
@@ -310,7 +345,7 @@ export function getGlobalCommand(key: number | string): Command {
         parameters: command.parameters,
     };
 
-    if (command.response != undefined) {
+    if (command.response !== undefined) {
         result.response = command.response;
     }
 
@@ -335,4 +370,152 @@ export function getFoundationCommand(id: number): FoundationDefinition {
 
 export function isFoundationDiscoverRsp(id: number): boolean {
     return FOUNDATION_DISCOVER_RSP_IDS.includes(id);
+}
+
+/** Check if value is equal to either min, max, minRef or maxRef */
+function isMinOrMax<T>(entry: Attribute | Parameter, value: T): boolean {
+    if (value === entry.max || value === entry.min) {
+        return true;
+    }
+
+    return false;
+}
+
+function processRestrictions<T>(entry: Attribute | Parameter, value: T): void {
+    if (entry.min !== undefined && (value as number) < entry.min) {
+        throw new Error(`${entry.name} requires min of ${entry.min}`);
+    }
+
+    if (entry.minExcl !== undefined && (value as number) <= entry.minExcl) {
+        throw new Error(`${entry.name} requires min exclusive of ${entry.minExcl}`);
+    }
+
+    if (entry.max !== undefined && (value as number) > entry.max) {
+        throw new Error(`${entry.name} requires max of ${entry.max}`);
+    }
+
+    if (entry.maxExcl !== undefined && (value as number) >= entry.maxExcl) {
+        throw new Error(`${entry.name} requires max exclusive of ${entry.maxExcl}`);
+    }
+
+    if (entry.length !== undefined && (value as string | unknown[] | Buffer).length !== entry.length) {
+        throw new Error(`${entry.name} requires length of ${entry.length}`);
+    }
+
+    if (entry.minLen !== undefined && (value as string | unknown[] | Buffer).length < entry.minLen) {
+        throw new Error(`${entry.name} requires min length of ${entry.minLen}`);
+    }
+
+    if (entry.maxLen !== undefined && (value as string | unknown[] | Buffer).length > entry.maxLen) {
+        throw new Error(`${entry.name} requires max length of ${entry.maxLen}`);
+    }
+}
+
+export function processAttributeWrite<T>(attribute: Attribute, value: T): T {
+    if (attribute.write !== true) {
+        throw new Error(`Attribute ${attribute.name} (${attribute.ID}) is not writable`);
+    }
+
+    if (value == null) {
+        return attribute.default !== undefined ? (attribute.default as T) : value /* XXX: dangerous fallback */;
+    }
+
+    // if default, always valid
+    if (attribute.default === value) {
+        return value;
+    }
+
+    if (Number.isNaN(value)) {
+        if (attribute.default === undefined) {
+            const nonValue = ZCL_TYPE_INVALID_BY_TYPE[attribute.type];
+
+            if (nonValue === undefined) {
+                throw new Error(`Attribute ${attribute.name} (${attribute.ID}) does not have a default nor a non-value`);
+            }
+
+            return nonValue as T;
+        }
+
+        return attribute.default as T;
+    }
+
+    processRestrictions(attribute, value);
+
+    return value;
+}
+
+export function processAttributePreRead(attribute: Attribute): void {
+    if (attribute.read === false) {
+        throw new Error(`Attribute ${attribute.name} (${attribute.ID}) is not readable`);
+    }
+}
+
+export function processAttributePostRead<T>(attribute: Attribute, value: T): T {
+    // should never happen?
+    if (value == null) {
+        return value;
+    }
+
+    // if default, always valid
+    if (attribute.default === value) {
+        return value;
+    }
+
+    // if type does not have an `invalid` (undefined) it won't match since value is checked above
+    if (value === ZCL_TYPE_INVALID_BY_TYPE[attribute.type]) {
+        // if value is same as max or min, ignore invalid sentinel
+        if (isMinOrMax(attribute, value)) {
+            return value;
+        }
+
+        // return NaN for both number & bigint to keep logic consistent
+        return Number.NaN as T;
+    }
+
+    processRestrictions(attribute, value);
+
+    return value;
+}
+
+export function processParameterWrite<T>(parameter: Parameter, value: T): T {
+    // should never happen?
+    if (value == null) {
+        return value;
+    }
+
+    if (Number.isNaN(value)) {
+        const nonValue = ZCL_TYPE_INVALID_BY_TYPE[parameter.type];
+
+        if (nonValue === undefined) {
+            throw new Error(`Parameter ${parameter.name} does not have a non-value`);
+        }
+
+        return nonValue as T;
+    }
+
+    processRestrictions(parameter, value);
+
+    return value;
+}
+
+export function processParameterRead<T>(parameter: Parameter, value: T): T {
+    // should never happen?
+    if (value == null) {
+        return value;
+    }
+
+    // if type does not have an `invalid` (undefined) it won't match since value is checked above
+    if (value === ZCL_TYPE_INVALID_BY_TYPE[parameter.type]) {
+        // if value is same as max or min, ignore invalid sentinel
+        if (isMinOrMax(parameter, value)) {
+            return value;
+        }
+
+        // return NaN for both number & bigint to keep logic consistent
+        return Number.NaN as T;
+    }
+
+    processRestrictions(parameter, value);
+
+    return value;
 }

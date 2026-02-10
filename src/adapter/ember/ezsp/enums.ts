@@ -44,6 +44,8 @@ export enum EzspFrameID {
     READ_AND_CLEAR_COUNTERS = 0x0065,
     READ_COUNTERS = 0x00f1,
     COUNTER_ROLLOVER_HANDLER = 0x00f2,
+    /** v17+ */
+    MUX_INVALID_RX_HANDLER = 0x0062,
     DELAY_TEST = 0x009d,
     GET_LIBRARY_STATUS = 0x0001,
     GET_XNCP_INFO = 0x0013,
@@ -398,6 +400,10 @@ export enum EzspFrameID {
     GPEP_INCOMING_MESSAGE_HANDLER = 0x00c5,
     GP_PROXY_TABLE_GET_ENTRY = 0x00c8,
     GP_PROXY_TABLE_LOOKUP = 0x00c0,
+    /** v17+ */
+    GP_PROXY_TABLE_REMOVE_ENTRY = 0x005d,
+    /** v17+ */
+    GP_CLEAR_PROXY_TABLE = 0x005f,
     GP_SINK_TABLE_GET_ENTRY = 0x00dd,
     GP_SINK_TABLE_LOOKUP = 0x00de,
     GP_SINK_TABLE_SET_ENTRY = 0x00df,
@@ -548,9 +554,9 @@ export enum EzspConfigId {
     PAN_ID_CONFLICT_REPORT_THRESHOLD = 0x22,
     /**
      * The timeout value in minutes for how long the Trust Center or a normal node
-     * waits for the ZigBee Request Key to complete. On the Trust Center this
+     * waits for the Zigbee Request Key to complete. On the Trust Center this
      * controls whether or not the device buffers the request, waiting for a
-     * matching pair of ZigBee Request Key. If the value is non-zero, the Trust
+     * matching pair of Zigbee Request Key. If the value is non-zero, the Trust
      * Center buffers and waits for that amount of time. If the value is zero, the
      * Trust Center does not buffer the request and immediately responds to the
      * request. Zero is the most compliant behavior.
@@ -586,7 +592,7 @@ export enum EzspConfigId {
     /**
      * Whether multicasts are sent to the RxOnWhenIdle=true address (0xFFFD) or
      * the sleepy broadcast address (0xFFFF). The RxOnWhenIdle=true address is the
-     * ZigBee compliant destination for multicasts.
+     * Zigbee compliant destination for multicasts.
      */
     SEND_MULTICASTS_TO_SLEEPY_ADDRESS = 0x2e,
     /** ZLL group address initial configuration. */
@@ -790,7 +796,7 @@ export enum EzspPolicyId {
     /** Controls whether the Trust Center will respond to application link key requests. */
     APP_KEY_REQUEST_POLICY = 0x06,
     /**
-     * Controls whether ZigBee packets that appear invalid are automatically dropped by the stack.
+     * Controls whether Zigbee packets that appear invalid are automatically dropped by the stack.
      * A counter will be incremented when this occurs.
      */
     PACKET_VALIDATE_LIBRARY_POLICY = 0x07,
@@ -864,7 +870,7 @@ export enum EzspValueId {
      * If the NCP initiated a rejoin it will record this value internally for retrieval by ezspGetValue(REAL_REJOIN_REASON).
      */
     LAST_REJOIN_REASON = 0x13,
-    /** The next ZigBee sequence number. */
+    /** The next Zigbee sequence number. */
     NEXT_ZIGBEE_SEQUENCE_NUMBER = 0x14,
     /** CCA energy detect threshold for radio. */
     CCA_THRESHOLD = 0x15,
@@ -973,25 +979,32 @@ export enum EzspValueId {
      * Policies for allowing/disallowing rejoins.
      */
     REJOIN_MODE = 0x47,
+    /**
+     * v17+
+     * Controls whether devices must use an install code when joining.
+     */
+    JOIN_USE_INSTALL_CODE_ENABLE = 0x48,
 }
 
 /**
  * Identifies a value based on specified characteristics.
  * Each set of characteristics is unique to that value and is specified during the call to get the extended value.
  *
- * uint16_t
+ * uint8_t
  */
 export enum EzspExtendedValueId {
     /** The flags field associated with the specified endpoint. Value is uint16_t */
-    ENDPOINT_FLAGS = 0x0000,
+    ENDPOINT_FLAGS = 0x00,
     /**
      * This is the reason for the node to leave the network as well as the device that told it to leave.
      * The leave reason is the 1st byte of the value while the node ID is the 2nd and 3rd byte.
      * If the leave was caused due to an API call rather than an over the air message, the node ID will be EMBER_UNKNOWN_NODE_ID (0xFFFD).
      */
-    LAST_LEAVE_REASON = 0x0001,
+    LAST_LEAVE_REASON = 0x01,
     /** This number of bytes of overhead required in the network frame for source routing to a particular destination. */
-    GET_SOURCE_ROUTE_OVERHEAD = 0x0002,
+    GET_SOURCE_ROUTE_OVERHEAD = 0x02,
+    /** v17+ These values are current or boot-time metrics gathered by the memory manager/buffer manager. */
+    MEMORY_USAGE_DATA = 0x03,
 }
 
 /** Flags associated with the endpoint data configured on the NCP. */
@@ -1084,4 +1097,18 @@ export enum EzspSleepMode {
     POWER_DOWN = 0x02,
     /** Reserved */
     RESERVED_SLEEP = 0x03,
+}
+
+/** v17+ */
+export enum EzspMemoryUsageData {
+    /** Gets the total available heap size in bytes */
+    TOTAL_HEAP_SIZE = 0x01,
+    /** Gets the used heap size in bytes at the time requested */
+    CURRENT_USED_HEAP_SIZE = 0x02,
+    /** Gets the "high watermark" of the heap (the highest the heap has been) in bytes at the time requested */
+    CURRENT_HEAP_HIGH_WATERMARK = 0x03,
+    /** Gets the used heap size in bytes at the time after sl_system_init */
+    INIT_USED_HEAP_SIZE = 0x04,
+    /** Gets the "high watermark" of the heap (the highest the heap has been) in bytes at the time after sl_system_init */
+    INIT_HEAP_HIGH_WATERMARK = 0x05,
 }

@@ -1,6 +1,6 @@
-import {DataStart, PositionCmd0, PositionCmd1, SOF, Subsystem, Type} from './constants';
+import {DataStart, PositionCmd0, PositionCmd1, SOF, type Subsystem, type Type} from "./constants";
 
-class Frame {
+export class Frame {
     public readonly type: Type;
     public readonly subsystem: Subsystem;
     public readonly commandID: number;
@@ -37,13 +37,13 @@ class Frame {
         const fcs = buffer.readUInt8(fcsPosition);
 
         // Validate the checksum to see if we fully received the message
-        const checksum = this.calculateChecksum(buffer.subarray(1, fcsPosition));
+        const checksum = Frame.calculateChecksum(buffer.subarray(1, fcsPosition));
 
         if (checksum === fcs) {
             return new Frame(type, subsystem, commandID, data, length, fcs);
-        } else {
-            throw new Error('Invalid checksum');
         }
+
+        throw new Error("Invalid checksum");
     }
 
     private static calculateChecksum(values: Buffer): number {
@@ -60,5 +60,3 @@ class Frame {
         return `${this.length} - ${this.type} - ${this.subsystem} - ${this.commandID} - [${[...this.data]}] - ${this.fcs}`;
     }
 }
-
-export default Frame;

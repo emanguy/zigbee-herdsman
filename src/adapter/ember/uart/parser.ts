@@ -1,25 +1,20 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import {Transform, TransformCallback, TransformOptions} from 'stream';
+import {Transform, type TransformCallback} from "node:stream";
 
 // import {logger} from '../../../utils/logger';
-import {AshReservedByte} from './enums';
+import {AshReservedByte} from "./enums";
 
 // const NS = 'zh:ember:uart:ash:parser';
 
 export class AshParser extends Transform {
-    private buffer: Buffer;
+    #buffer = Buffer.alloc(0);
 
-    public constructor(opts?: TransformOptions) {
-        super(opts);
-
-        this.buffer = Buffer.alloc(0);
-    }
-
-    _transform(chunk: Buffer, encoding: BufferEncoding, cb: TransformCallback): void {
-        let data = Buffer.concat([this.buffer, chunk]);
+    override _transform(chunk: Buffer, _encoding: BufferEncoding, cb: TransformCallback): void {
+        let data = Buffer.concat([this.#buffer, chunk]);
         let position: number;
 
+        // biome-ignore lint/suspicious/noAssignInExpressions: shorter
         while ((position = data.indexOf(AshReservedByte.FLAG)) !== -1) {
             // emit the frame via 'data' event
             const frame = data.subarray(0, position + 1);
@@ -32,15 +27,15 @@ export class AshParser extends Transform {
             data = data.subarray(position + 1);
         }
 
-        this.buffer = data;
+        this.#buffer = data;
 
         cb();
     }
 
-    _flush(cb: TransformCallback): void {
-        this.push(this.buffer);
+    override _flush(cb: TransformCallback): void {
+        this.push(this.#buffer);
 
-        this.buffer = Buffer.alloc(0);
+        this.#buffer = Buffer.alloc(0);
 
         cb();
     }

@@ -1,5 +1,6 @@
-import * as Zdo from '../src/zspec/zdo';
-import * as ZdoTypes from '../src/zspec/zdo/definition/tstypes';
+import * as Zcl from "../src/zspec/zcl";
+import * as Zdo from "../src/zspec/zdo";
+import type * as ZdoTypes from "../src/zspec/zdo/definition/tstypes";
 
 export const NODE_DESC_DEFAULTS = {
     // nwkAddress: NodeId;
@@ -23,9 +24,9 @@ export const LQI_TABLE_ENTRY_DEFAULTS = {
     // nwkAddress: NodeId;
     /**
      * The type of the neighbor device:
-     * 0x00 = ZigBee coordinator
-     * 0x01 = ZigBee router
-     * 0x02 = ZigBee end device
+     * 0x00 = Zigbee coordinator
+     * 0x01 = Zigbee router
+     * 0x02 = Zigbee end device
      * 0x03 = Unknown
      *
      * 2-bit
@@ -91,8 +92,9 @@ export const MOCK_DEVICES: {
         simpleDescriptor?: {[key: number]: ZdoTypes.ResponseMap[Zdo.ClusterId.SIMPLE_DESCRIPTOR_RESPONSE] | undefined};
         lqiTable?: ZdoTypes.ResponseMap[Zdo.ClusterId.LQI_TABLE_RESPONSE];
         routingTable?: ZdoTypes.ResponseMap[Zdo.ClusterId.ROUTING_TABLE_RESPONSE];
+        bindingTable?: ZdoTypes.ResponseMap[Zdo.ClusterId.BINDING_TABLE_REQUEST];
         attributes?: {[key: number]: {[key: string]: unknown}};
-        key?: 'xiaomi';
+        key?: "xiaomi";
     };
 } = {
     // coordinator
@@ -121,13 +123,13 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             1: {
-                modelId: 'myModelID',
-                manufacturerName: 'KoenAndCo',
+                modelId: "myModelID",
+                manufacturerName: "KoenAndCo",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
@@ -141,8 +143,8 @@ export const MOCK_DEVICES: {
                 neighborTableEntries: 2,
                 startIndex: 0,
                 entryList: [
-                    {...LQI_TABLE_ENTRY_DEFAULTS, eui64: '0x160', nwkAddress: 160, lqi: 20, relationship: 2, depth: 5},
-                    {...LQI_TABLE_ENTRY_DEFAULTS, eui64: '0x170', nwkAddress: 170, lqi: 21, relationship: 4, depth: 8},
+                    {...LQI_TABLE_ENTRY_DEFAULTS, eui64: "0x160", nwkAddress: 160, lqi: 20, relationship: 2, depth: 5},
+                    {...LQI_TABLE_ENTRY_DEFAULTS, eui64: "0x170", nwkAddress: 170, lqi: 21, relationship: 4, depth: 8},
                 ],
             },
         ],
@@ -152,20 +154,44 @@ export const MOCK_DEVICES: {
                 routingTableEntries: 2,
                 startIndex: 0,
                 entryList: [
-                    {...ROUTING_TABLE_ENTRY_DEFAULTS, destinationAddress: 120, status: 'ACTIVE', nextHopAddress: 1},
-                    {...ROUTING_TABLE_ENTRY_DEFAULTS, destinationAddress: 130, status: 'DISCOVERY_FAILED', nextHopAddress: 2},
+                    {...ROUTING_TABLE_ENTRY_DEFAULTS, destinationAddress: 120, status: "ACTIVE", nextHopAddress: 1},
+                    {...ROUTING_TABLE_ENTRY_DEFAULTS, destinationAddress: 130, status: "DISCOVERY_FAILED", nextHopAddress: 2},
+                ],
+            },
+        ],
+        bindingTable: [
+            Zdo.Status.SUCCESS,
+            {
+                bindingTableEntries: 2,
+                startIndex: 0,
+                entryList: [
+                    {
+                        sourceEui64: "0xf1f2f3f5f6f7f8",
+                        sourceEndpoint: 1,
+                        clusterId: Zcl.Clusters.genBasic.ID,
+                        destAddrMode: 0x03,
+                        dest: "0xa1a2a3a4a5a6a7a8",
+                        destEndpoint: 2,
+                    },
+                    {
+                        sourceEui64: "0xe1e2e3e5e6e7e8",
+                        sourceEndpoint: 3,
+                        clusterId: Zcl.Clusters.genAlarms.ID,
+                        destAddrMode: 0x01,
+                        dest: 0x1234,
+                    },
                 ],
             },
         ],
     },
     150: {
         nodeDescriptor: undefined,
-        key: 'xiaomi',
+        key: "xiaomi",
     },
     151: {
         nodeDescriptor: [Zdo.Status.SUCCESS, {...NODE_DESC_DEFAULTS, nwkAddress: 151, logicalType: 0b010, manufacturerCode: 1219}],
         activeEndpoints: undefined,
-        key: 'xiaomi',
+        key: "xiaomi",
     },
     160: {
         nodeDescriptor: [Zdo.Status.SUCCESS, {...NODE_DESC_DEFAULTS, nwkAddress: 160, logicalType: 0b001, manufacturerCode: 1212}],
@@ -191,13 +217,13 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             1: {
-                modelId: 'myDevice9123',
-                manufacturerName: 'Boef',
+                modelId: "myDevice9123",
+                manufacturerName: "Boef",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
@@ -223,13 +249,13 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             2: {
-                modelId: 'myDevice9124',
-                manufacturerName: 'Boef',
+                modelId: "myDevice9124",
+                manufacturerName: "Boef",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
@@ -257,14 +283,14 @@ export const MOCK_DEVICES: {
         attributes: {
             1: {
                 zoneState: 0,
-                iasCieAddr: '0x0000012300000000',
-                modelId: 'myIasDevice',
-                manufacturerName: 'KoenAndCoSecurity',
+                iasCieAddr: "0x0000012300000000",
+                modelId: "myIasDevice",
+                manufacturerName: "KoenAndCoSecurity",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
@@ -291,13 +317,13 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             1: {
-                modelId: 'lumi.remote.b286opcn01',
-                manufacturerName: 'Xioami',
+                modelId: "lumi.remote.b286opcn01",
+                manufacturerName: "Xioami",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
@@ -351,13 +377,13 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             12: {
-                modelId: 'GL-C-008',
-                manufacturerName: 'Gledopto',
+                modelId: "GL-C-008",
+                manufacturerName: "Gledopto",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
@@ -402,13 +428,13 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             1: {
-                modelId: 'lumi.plug',
-                manufacturerName: 'LUMI',
+                modelId: "lumi.plug",
+                manufacturerName: "LUMI",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
@@ -425,20 +451,23 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             1: {
-                modelId: 'lumi.plug',
-                manufacturerName: 'LUMI',
+                modelId: "lumi.plug",
+                manufacturerName: "LUMI",
                 zclVersion: 1,
                 appVersion: 2,
                 hwVersion: 3,
-                dateCode: '201901',
-                swBuildId: '1.01',
+                dateCode: "201901",
+                swBuildId: "1.01",
                 powerSource: 1,
                 stackVersion: 101,
             },
         },
     },
     177: {
-        nodeDescriptor: [Zdo.Status.SUCCESS, {...NODE_DESC_DEFAULTS, nwkAddress: 177, logicalType: 0b001, manufacturerCode: 4129}],
+        nodeDescriptor: [
+            Zdo.Status.SUCCESS,
+            {...NODE_DESC_DEFAULTS, nwkAddress: 177, logicalType: 0b001, manufacturerCode: Zcl.ManufacturerCode.LEGRAND_GROUP},
+        ],
         activeEndpoints: [Zdo.Status.SUCCESS, {nwkAddress: 177, endpointList: [1]}],
         simpleDescriptor: {
             1: [
@@ -457,13 +486,135 @@ export const MOCK_DEVICES: {
         },
         attributes: {
             1: {
-                modelId: ' Shutter switch with neutral',
-                manufacturerName: 'Legrand',
+                modelId: " Shutter switch with neutral",
+                manufacturerName: "Legrand",
                 zclVersion: 2,
                 appVersion: 0,
                 hwVersion: 8,
-                dateCode: '231030',
-                swBuildId: '0038',
+                dateCode: "231030",
+                swBuildId: "0038",
+                powerSource: 1,
+                stackVersion: 67,
+            },
+        },
+    },
+    178: {
+        nodeDescriptor: [
+            Zdo.Status.SUCCESS,
+            {...NODE_DESC_DEFAULTS, nwkAddress: 178, logicalType: 0b001, manufacturerCode: Zcl.ManufacturerCode.LEGRAND_GROUP},
+        ],
+        activeEndpoints: [Zdo.Status.SUCCESS, {nwkAddress: 178, endpointList: [1, 2]}],
+        simpleDescriptor: {
+            1: [
+                Zdo.Status.SUCCESS,
+                {
+                    nwkAddress: 178,
+                    length: 32,
+                    endpoint: 1,
+                    profileId: 260,
+                    deviceId: 514,
+                    deviceVersion: 1,
+                    inClusterList: [0, 3, 258, 4, 5, 15, 64513],
+                    outClusterList: [258, 0, 64513, 5, 25],
+                },
+            ],
+            2: [
+                Zdo.Status.SUCCESS,
+                {
+                    nwkAddress: 178,
+                    length: 32,
+                    endpoint: 2,
+                    profileId: 260,
+                    deviceId: 514,
+                    deviceVersion: 1,
+                    inClusterList: [0, 3, 258, 4, 5, 15],
+                    outClusterList: [258, 0, 64513, 5, 25],
+                },
+            ],
+        },
+        attributes: {
+            1: {
+                modelId: " other multi-endpoint device",
+                manufacturerName: "Legrand",
+                zclVersion: 2,
+                appVersion: 0,
+                hwVersion: 8,
+                dateCode: "241030",
+                swBuildId: "0039",
+                powerSource: 1,
+                stackVersion: 67,
+            },
+        },
+    },
+    179: {
+        nodeDescriptor: [
+            Zdo.Status.SUCCESS,
+            {...NODE_DESC_DEFAULTS, nwkAddress: 179, logicalType: 0b001, manufacturerCode: Zcl.ManufacturerCode.V_MARK_ENTERPRISES_INC},
+        ],
+        activeEndpoints: [Zdo.Status.SUCCESS, {nwkAddress: 179, endpointList: [1, 2, 3, 4]}],
+        simpleDescriptor: {
+            1: [
+                Zdo.Status.SUCCESS,
+                {
+                    nwkAddress: 179,
+                    length: 32,
+                    endpoint: 1,
+                    profileId: 260,
+                    deviceId: 514,
+                    deviceVersion: 1,
+                    inClusterList: [0, 64561],
+                    outClusterList: [64561],
+                },
+            ],
+            2: [
+                Zdo.Status.SUCCESS,
+                {
+                    nwkAddress: 179,
+                    length: 32,
+                    endpoint: 1,
+                    profileId: 260,
+                    deviceId: 514,
+                    deviceVersion: 1,
+                    inClusterList: [0, 64561],
+                    outClusterList: [64561],
+                },
+            ],
+            3: [
+                Zdo.Status.SUCCESS,
+                {
+                    nwkAddress: 179,
+                    length: 32,
+                    endpoint: 1,
+                    profileId: 260,
+                    deviceId: 514,
+                    deviceVersion: 1,
+                    inClusterList: [0, 64561],
+                    outClusterList: [64561],
+                },
+            ],
+            4: [
+                Zdo.Status.SUCCESS,
+                {
+                    nwkAddress: 179,
+                    length: 32,
+                    endpoint: 1,
+                    profileId: 260,
+                    deviceId: 514,
+                    deviceVersion: 1,
+                    inClusterList: [0, 64561],
+                    outClusterList: [64561],
+                },
+            ],
+        },
+        attributes: {
+            1: {
+                modelId: "VZM30-SN",
+                manufacturerName: "Inovelli",
+                zclVersion: 3,
+                appVersion: 0,
+                hwVersion: 8,
+                dateCode: "2025",
+                swBuildId: "0001",
                 powerSource: 1,
                 stackVersion: 67,
             },

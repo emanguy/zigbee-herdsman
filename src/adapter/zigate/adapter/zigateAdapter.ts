@@ -1,23 +1,23 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import * as Models from '../../../models';
-import {Queue, Wait, Waitress} from '../../../utils';
-import {logger} from '../../../utils/logger';
-import * as ZSpec from '../../../zspec';
-import {BroadcastAddress} from '../../../zspec/enums';
-import * as Zcl from '../../../zspec/zcl';
-import * as Zdo from '../../../zspec/zdo';
-import * as ZdoTypes from '../../../zspec/zdo/definition/tstypes';
-import Adapter from '../../adapter';
-import * as Events from '../../events';
-import * as TsType from '../../tstype';
-import {RawAPSDataRequestPayload} from '../driver/commandType';
-import {ADDRESS_MODE, DEVICE_TYPE, ZiGateCommandCode, ZiGateMessageCode, ZPSNwkKeyState} from '../driver/constants';
-import Driver from '../driver/zigate';
-import ZiGateObject from '../driver/ziGateObject';
-import {patchZdoBuffaloBE} from './patchZdoBuffaloBE';
+import type * as Models from "../../../models";
+import {Queue, Waitress, wait} from "../../../utils";
+import {logger} from "../../../utils/logger";
+import * as ZSpec from "../../../zspec";
+import type {BroadcastAddress} from "../../../zspec/enums";
+import * as Zcl from "../../../zspec/zcl";
+import * as Zdo from "../../../zspec/zdo";
+import type * as ZdoTypes from "../../../zspec/zdo/definition/tstypes";
+import Adapter from "../../adapter";
+import type * as Events from "../../events";
+import type * as TsType from "../../tstype";
+import type {RawAPSDataRequestPayload} from "../driver/commandType";
+import {AddressMode, DeviceType, ZiGateCommandCode, ZiGateMessageCode, ZPSNwkKeyState} from "../driver/constants";
+import type ZiGateObject from "../driver/ziGateObject";
+import Driver from "../driver/zigate";
+import {patchZdoBuffaloBE} from "./patchZdoBuffaloBE";
 
-const NS = 'zh:zigate';
+const NS = "zh:zigate";
 const default_bind_group = 901; // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/lib/constants.js#L3
 interface WaitressMatcher {
     address?: number | string;
@@ -29,7 +29,7 @@ interface WaitressMatcher {
     direction: number;
 }
 
-class ZiGateAdapter extends Adapter {
+export class ZiGateAdapter extends Adapter {
     private driver: Driver;
     private joinPermitted: boolean;
     private waitress: Waitress<Events.ZclPayload, WaitressMatcher>;
@@ -49,50 +49,55 @@ class ZiGateAdapter extends Adapter {
 
         this.joinPermitted = false;
         this.closing = false;
-        const concurrent = this.adapterOptions && this.adapterOptions.concurrent ? this.adapterOptions.concurrent : 2;
+        const concurrent = this.adapterOptions?.concurrent ? this.adapterOptions.concurrent : 2;
         logger.debug(`Adapter concurrent: ${concurrent}`, NS);
         this.queue = new Queue(concurrent);
+        // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
         this.driver = new Driver(serialPortOptions.path!, serialPortOptions);
         this.waitress = new Waitress<Events.ZclPayload, WaitressMatcher>(this.waitressValidator, this.waitressTimeoutFormatter);
 
-        this.driver.on('received', this.dataListener.bind(this));
-        this.driver.on('LeaveIndication', this.leaveIndicationListener.bind(this));
-        this.driver.on('DeviceAnnounce', this.deviceAnnounceListener.bind(this));
-        this.driver.on('close', this.onZiGateClose.bind(this));
-        this.driver.on('zdoResponse', this.onZdoResponse.bind(this));
+        this.driver.on("received", this.dataListener.bind(this));
+        this.driver.on("LeaveIndication", this.leaveIndicationListener.bind(this));
+        this.driver.on("DeviceAnnounce", this.deviceAnnounceListener.bind(this));
+        this.driver.on("close", this.onZiGateClose.bind(this));
+        this.driver.on("zdoResponse", this.onZdoResponse.bind(this));
     }
 
     /**
      * Adapter methods
      */
     public async start(): Promise<TsType.StartResult> {
-        let startResult: TsType.StartResult = 'resumed';
+        let startResult: TsType.StartResult = "resumed";
         try {
             await this.driver.open();
-            logger.info('Connected to ZiGate adapter successfully.', NS);
+            logger.info("Connected to ZiGate adapter successfully.", NS);
 
             const resetResponse = await this.driver.sendCommand(ZiGateCommandCode.Reset, {}, 5000);
             if (resetResponse.code === ZiGateMessageCode.RestartNonFactoryNew) {
-                startResult = 'resumed';
+                startResult = "resumed";
             } else if (resetResponse.code === ZiGateMessageCode.RestartFactoryNew) {
-                startResult = 'reset';
+                startResult = "reset";
             }
             await this.driver.sendCommand(ZiGateCommandCode.RawMode, {enabled: 0x01});
             // @todo check
             await this.driver.sendCommand(ZiGateCommandCode.SetDeviceType, {
-                deviceType: DEVICE_TYPE.coordinator,
+                deviceType: DeviceType.Coordinator,
             });
             await this.initNetwork();
 
             await this.driver.sendCommand(ZiGateCommandCode.AddGroup, {
-                addressMode: ADDRESS_MODE.short,
+                addressMode: AddressMode.Short,
                 shortAddress: ZSpec.COORDINATOR_ADDRESS,
                 sourceEndpoint: ZSpec.HA_ENDPOINT,
                 destinationEndpoint: ZSpec.HA_ENDPOINT,
                 groupAddress: default_bind_group,
             });
+
+            if (this.adapterOptions.transmitPower != null) {
+                await this.driver.sendCommand(ZiGateCommandCode.SetTXpower, {value: this.adapterOptions.transmitPower});
+            }
         } catch (error) {
-            throw new Error('failed to connect to zigate adapter ' + (error as Error).message);
+            throw new Error(`failed to connect to zigate adapter ${(error as Error).message}`);
         }
 
         return startResult; // 'resumed' | 'reset' | 'restored'
@@ -113,14 +118,14 @@ class ZiGateAdapter extends Adapter {
         const meta = {
             transportrev: 0,
             product: 0,
-            majorrel: parseInt(<string>result.payload.major).toString(16),
-            minorrel: parseInt(<string>result.payload.minor).toString(16),
-            maintrel: parseInt(<string>result.payload.revision).toString(16),
-            revision: parseInt(<string>result.payload.revision).toString(16),
+            majorrel: Number.parseInt(<string>result.payload.major, 10).toString(16),
+            minorrel: Number.parseInt(<string>result.payload.minor, 10).toString(16),
+            maintrel: Number.parseInt(<string>result.payload.revision, 10).toString(16),
+            revision: Number.parseInt(<string>result.payload.revision, 10).toString(16),
         };
 
         return {
-            type: 'zigate',
+            type: "zigate",
             meta: meta,
         };
     }
@@ -135,8 +140,7 @@ class ZiGateAdapter extends Adapter {
 
             const result = await this.sendZdo(ZSpec.BLANK_EUI64, networkAddress, clusterId, zdoPayload, false);
 
-            /* istanbul ignore next */
-            if (!Zdo.Buffalo.checkStatus(result)) {
+            if (!Zdo.Buffalo.checkStatus<Zdo.ClusterId.PERMIT_JOINING_RESPONSE>(result)) {
                 // TODO: will disappear once moved upstream
                 throw new Zdo.StatusError(result[0]);
             }
@@ -150,16 +154,14 @@ class ZiGateAdapter extends Adapter {
 
         this.joinPermitted = seconds !== 0;
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    public async addInstallCode(ieeeAddress: string, key: Buffer): Promise<void> {
-        throw new Error('Add install code is not supported');
+    public async addInstallCode(_ieeeAddress: string, _key: Buffer, _hashed: boolean): Promise<void> {
+        await Promise.reject(new Error("Add install code is not supported"));
     }
 
-    public async reset(type: 'soft' | 'hard'): Promise<void> {
-        if (type === 'soft') {
+    public async reset(type: "soft" | "hard"): Promise<void> {
+        if (type === "soft") {
             await this.driver.sendCommand(ZiGateCommandCode.Reset, {}, 5000);
-        } else if (type === 'hard') {
+        } else if (type === "hard") {
             await this.driver.sendCommand(ZiGateCommandCode.ErasePersistentData, {}, 5000);
         }
     }
@@ -169,9 +171,10 @@ class ZiGateAdapter extends Adapter {
             const result = await this.driver.sendCommand(ZiGateCommandCode.GetNetworkState, {}, 10000);
 
             return {
-                panID: <number>result.payload.PANID,
-                extendedPanID: <number>result.payload.ExtPANID,
-                channel: <number>result.payload.Channel,
+                panID: result.payload.PANID as number,
+                extendedPanID: result.payload.ExtPANID as string, // read as IEEEADDR, so `0x${string}`
+                channel: result.payload.Channel as number,
+                nwkUpdateID: 0 as number,
             };
         } catch (error) {
             throw new Error(`Get network parameters failed ${error}`);
@@ -183,19 +186,11 @@ class ZiGateAdapter extends Adapter {
      * pdm from host
      */
     public async supportsBackup(): Promise<boolean> {
-        return false;
+        return await Promise.resolve(false);
     }
 
     public async backup(): Promise<Models.Backup> {
-        throw new Error('This adapter does not support backup');
-    }
-
-    public async setTransmitPower(value: number): Promise<void> {
-        try {
-            await this.driver.sendCommand(ZiGateCommandCode.SetTXpower, {value: value});
-        } catch (error) {
-            throw new Error(`Set transmitpower failed ${error}`);
-        }
+        return await Promise.reject(new Error("This adapter does not support backup"));
     }
 
     public async sendZdo(
@@ -218,7 +213,7 @@ class ZiGateAdapter extends Adapter {
         clusterId: K,
         payload: Buffer,
         disableResponse: boolean,
-    ): Promise<ZdoTypes.RequestToResponseMap[K] | void> {
+    ): Promise<ZdoTypes.RequestToResponseMap[K] | undefined> {
         return await this.queue.execute(async () => {
             // stack-specific requirements
             // https://zigate.fr/documentation/commandes-zigate/
@@ -261,7 +256,7 @@ class ZiGateAdapter extends Adapter {
                 }
             }
 
-            let waiter;
+            let waiter: ReturnType<typeof this.driver.zdoWaitFor> | undefined;
 
             if (!disableResponse) {
                 const responseClusterId = Zdo.Utils.getResponseClusterId(clusterId);
@@ -296,8 +291,9 @@ class ZiGateAdapter extends Adapter {
         disableResponse: boolean,
         disableRecovery: boolean,
         sourceEndpoint?: number,
-    ): Promise<Events.ZclPayload | void> {
-        return await this.queue.execute<Events.ZclPayload | void>(async () => {
+        profileId?: number,
+    ): Promise<Events.ZclPayload | undefined> {
+        return await this.queue.execute<Events.ZclPayload | undefined>(async () => {
             return await this.sendZclFrameToEndpointInternal(
                 ieeeAddr,
                 networkAddress,
@@ -311,6 +307,7 @@ class ZiGateAdapter extends Adapter {
                 0,
                 false,
                 false,
+                profileId,
             );
         }, networkAddress);
     }
@@ -328,7 +325,8 @@ class ZiGateAdapter extends Adapter {
         dataRequestAttempt: number,
         checkedNetworkAddress: boolean,
         discoveredRoute: boolean,
-    ): Promise<Events.ZclPayload | void> {
+        profileId?: number,
+    ): Promise<Events.ZclPayload | undefined> {
         logger.debug(
             `sendZclFrameToEndpointInternal ${ieeeAddr}:${networkAddress}/${endpoint} (${responseAttempt},${dataRequestAttempt},${this.queue.count()})`,
             NS,
@@ -338,11 +336,11 @@ class ZiGateAdapter extends Adapter {
         const data = zclFrame.toBuffer();
         const command = zclFrame.command;
         const payload: RawAPSDataRequestPayload = {
-            addressMode: ADDRESS_MODE.short, //nwk
+            addressMode: AddressMode.Short, //nwk
             targetShortAddress: networkAddress,
             sourceEndpoint: sourceEndpoint || ZSpec.HA_ENDPOINT,
             destinationEndpoint: endpoint,
-            profileID: ZSpec.HA_PROFILE_ID,
+            profileID: profileId ?? ZSpec.HA_PROFILE_ID,
             clusterID: zclFrame.cluster.ID,
             securityMode: 0x02,
             radius: 30,
@@ -350,7 +348,7 @@ class ZiGateAdapter extends Adapter {
             data: data,
         };
 
-        if (command.response != undefined && disableResponse === false) {
+        if (command.response !== undefined && disableResponse === false) {
             response = this.waitFor(
                 networkAddress,
                 endpoint,
@@ -420,14 +418,20 @@ class ZiGateAdapter extends Adapter {
                         checkedNetworkAddress,
                         discoveredRoute,
                     );
-                } else {
-                    throw error;
                 }
+
+                throw error;
             }
         }
     }
 
-    public async sendZclFrameToAll(endpoint: number, zclFrame: Zcl.Frame, sourceEndpoint: number, destination: BroadcastAddress): Promise<void> {
+    public async sendZclFrameToAll(
+        endpoint: number,
+        zclFrame: Zcl.Frame,
+        sourceEndpoint: number,
+        destination: BroadcastAddress,
+        profileId?: number,
+    ): Promise<void> {
         return await this.queue.execute<void>(async () => {
             if (sourceEndpoint !== 0x01 /*&& sourceEndpoint !== 242*/) {
                 // @todo on zigate firmware without gp causes hang
@@ -437,11 +441,11 @@ class ZiGateAdapter extends Adapter {
 
             const data = zclFrame.toBuffer();
             const payload: RawAPSDataRequestPayload = {
-                addressMode: ADDRESS_MODE.short, //nwk
+                addressMode: AddressMode.Short, //nwk
                 targetShortAddress: destination,
                 sourceEndpoint: sourceEndpoint,
                 destinationEndpoint: endpoint,
-                profileID: /*sourceEndpoint === ZSpec.GP_ENDPOINT ? ZSpec.GP_PROFILE_ID :*/ ZSpec.HA_PROFILE_ID,
+                profileID: profileId ?? ZSpec.HA_PROFILE_ID,
                 clusterID: zclFrame.cluster.ID,
                 securityMode: 0x02,
                 radius: 30,
@@ -451,19 +455,19 @@ class ZiGateAdapter extends Adapter {
             logger.debug(() => `sendZclFrameToAll ${JSON.stringify(payload)}`, NS);
 
             await this.driver.sendCommand(ZiGateCommandCode.RawAPSDataRequest, payload, undefined, {}, true);
-            await Wait(200);
+            await wait(200);
         });
     }
 
-    public async sendZclFrameToGroup(groupID: number, zclFrame: Zcl.Frame, sourceEndpoint?: number): Promise<void> {
+    public async sendZclFrameToGroup(groupID: number, zclFrame: Zcl.Frame, sourceEndpoint?: number, profileId?: number): Promise<void> {
         return await this.queue.execute<void>(async () => {
             const data = zclFrame.toBuffer();
             const payload: RawAPSDataRequestPayload = {
-                addressMode: ADDRESS_MODE.group, //nwk
+                addressMode: AddressMode.Group, //nwk
                 targetShortAddress: groupID,
                 sourceEndpoint: sourceEndpoint || ZSpec.HA_ENDPOINT,
                 destinationEndpoint: 0xff,
-                profileID: ZSpec.HA_PROFILE_ID,
+                profileID: profileId ?? ZSpec.HA_PROFILE_ID,
                 clusterID: zclFrame.cluster.ID,
                 securityMode: 0x02,
                 radius: 30,
@@ -472,7 +476,7 @@ class ZiGateAdapter extends Adapter {
             };
 
             await this.driver.sendCommand(ZiGateCommandCode.RawAPSDataRequest, payload, undefined, {}, true);
-            await Wait(200);
+            await wait(200);
         });
     }
 
@@ -485,7 +489,7 @@ class ZiGateAdapter extends Adapter {
             channelMask: ZSpec.Utils.channelsToUInt32Mask(this.networkOptions.channelList),
         });
 
-        logger.debug(`Set security key`, NS);
+        logger.debug("Set security key", NS);
         await this.driver.sendCommand(ZiGateCommandCode.SetSecurityStateKey, {
             keyType: this.networkOptions.networkKeyDistribute
                 ? ZPSNwkKeyState.ZPS_ZDO_DISTRIBUTED_LINK_KEY
@@ -495,13 +499,20 @@ class ZiGateAdapter extends Adapter {
 
         try {
             // The block is wrapped in trapping because if the network is already created, the firmware does not accept the new key.
-            logger.debug(`Set EPanID ${this.networkOptions.extendedPanID!.toString()}`, NS);
+            logger.debug(
+                `Set EPanID ${
+                    // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
+                    this.networkOptions.extendedPanID!.toString()
+                }`,
+                NS,
+            );
             await this.driver.sendCommand(ZiGateCommandCode.SetExtendedPANID, {
                 panId: this.networkOptions.extendedPanID,
             });
 
             await this.driver.sendCommand(ZiGateCommandCode.StartNetwork, {});
         } catch (error) {
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             logger.error((error as Error).stack!, NS);
         }
     }
@@ -530,48 +541,41 @@ class ZiGateAdapter extends Adapter {
         return {promise: waiter.start().promise, cancel};
     }
 
-    public static async isValidPath(path: string): Promise<boolean> {
-        return await Driver.isValidPath(path);
-    }
-
-    public static async autoDetectPath(): Promise<string | undefined> {
-        return await Driver.autoDetectPath();
-    }
-
     /**
      * InterPAN !!! not implemented
      */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    public async setChannelInterPAN(channel: number): Promise<void> {
-        throw new Error('Not supported');
+    public async setChannelInterPAN(_channel: number): Promise<void> {
+        await Promise.reject(new Error("Not supported"));
+    }
+    public async sendZclFrameInterPANToIeeeAddr(_zclFrame: Zcl.Frame, _ieeeAddress: string): Promise<void> {
+        await Promise.reject(new Error("Not supported"));
+    }
+    public async sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number, disableResponse: false): Promise<Events.ZclPayload>;
+    public async sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number, disableResponse: true): Promise<undefined>;
+    public async sendZclFrameInterPANBroadcast(
+        _zclFrame: Zcl.Frame,
+        _timeout: number,
+        _disableResponse: boolean,
+    ): Promise<Events.ZclPayload | undefined> {
+        return await Promise.reject(new Error("Not supported"));
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    public async sendZclFrameInterPANToIeeeAddr(zclFrame: Zcl.Frame, ieeeAddress: string): Promise<void> {
-        throw new Error('Not supported');
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    public async sendZclFrameInterPANBroadcast(zclFrame: Zcl.Frame, timeout: number): Promise<Events.ZclPayload> {
-        throw new Error('Not supported');
-    }
-
-    public restoreChannelInterPAN(): Promise<void> {
-        throw new Error('Not supported');
+    public async restoreChannelInterPAN(): Promise<void> {
+        await Promise.reject(new Error("Not supported"));
     }
 
     private deviceAnnounceListener(response: ZdoTypes.EndDeviceAnnounce): void {
         // @todo debounce
         if (this.joinPermitted === true) {
-            this.emit('deviceJoined', {networkAddress: response.nwkAddress, ieeeAddr: response.eui64});
+            this.emit("deviceJoined", {networkAddress: response.nwkAddress, ieeeAddr: response.eui64});
         } else {
             // convert to `zdoResponse` to avoid needing extra event upstream
-            this.emit('zdoResponse', Zdo.ClusterId.END_DEVICE_ANNOUNCE, [Zdo.Status.SUCCESS, response]);
+            this.emit("zdoResponse", Zdo.ClusterId.END_DEVICE_ANNOUNCE, [Zdo.Status.SUCCESS, response]);
         }
     }
 
     private onZdoResponse(clusterId: Zdo.ClusterId, response: ZdoTypes.GenericZdoResponse): void {
-        this.emit('zdoResponse', clusterId, response);
+        this.emit("zdoResponse", clusterId, response);
     }
 
     private dataListener(ziGateObject: ZiGateObject): void {
@@ -581,13 +585,14 @@ class ZiGateAdapter extends Adapter {
             data: ziGateObject.payload.payload,
             header: Zcl.Header.fromBuffer(ziGateObject.payload.payload),
             endpoint: <number>ziGateObject.payload.sourceEndpoint,
+            // biome-ignore lint/style/noNonNullAssertion: ignored using `--suppress`
             linkquality: ziGateObject.frame!.readRSSI(), // read: frame valid
             groupID: 0, // @todo
             wasBroadcast: false, // TODO
             destinationEndpoint: <number>ziGateObject.payload.destinationEndpoint,
         };
         this.waitress.resolve(payload);
-        this.emit('zclPayload', payload);
+        this.emit("zclPayload", payload);
     }
 
     private leaveIndicationListener(ziGateObject: ZiGateObject): void {
@@ -596,7 +601,7 @@ class ZiGateAdapter extends Adapter {
             networkAddress: <number>ziGateObject.payload.extendedAddress,
             ieeeAddr: <string>ziGateObject.payload.extendedAddress,
         };
-        this.emit('deviceLeave', payload);
+        this.emit("deviceLeave", payload);
     }
 
     private waitressTimeoutFormatter(matcher: WaitressMatcher, timeout: number): string {
@@ -612,7 +617,7 @@ class ZiGateAdapter extends Adapter {
             payload.header &&
                 (!matcher.address || payload.address === matcher.address) &&
                 matcher.endpoint === payload.endpoint &&
-                (!matcher.transactionSequenceNumber || payload.header.transactionSequenceNumber === matcher.transactionSequenceNumber) &&
+                (matcher.transactionSequenceNumber === undefined || payload.header.transactionSequenceNumber === matcher.transactionSequenceNumber) &&
                 matcher.clusterID === payload.clusterID &&
                 matcher.frameType === payload.header.frameControl.frameType &&
                 matcher.commandIdentifier === payload.header.commandIdentifier &&
@@ -622,9 +627,7 @@ class ZiGateAdapter extends Adapter {
 
     private onZiGateClose(): void {
         if (!this.closing) {
-            this.emit('disconnected');
+            this.emit("disconnected");
         }
     }
 }
-
-export default ZiGateAdapter;

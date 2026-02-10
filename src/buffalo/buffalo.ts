@@ -1,6 +1,7 @@
-import {EUI64} from '../zspec/tstypes';
+import {Utils as ZSpecUtils} from "../zspec";
+import type {Eui64} from "../zspec/tstypes";
 
-class Buffalo {
+export class Buffalo {
     protected position: number;
     protected buffer: Buffer;
 
@@ -11,6 +12,14 @@ class Buffalo {
 
     public getPosition(): number {
         return this.position;
+    }
+
+    /**
+     * Set the position of the internal position tracker.
+     * @param position
+     */
+    public setPosition(position: number): void {
+        this.position = position;
     }
 
     public getBuffer(): Buffer {
@@ -26,8 +35,7 @@ class Buffalo {
     }
 
     public writeUInt8(value: number): void {
-        this.buffer.writeUInt8(value, this.position);
-        this.position++;
+        this.position = this.buffer.writeUInt8(value, this.position);
     }
 
     public readUInt8(): number {
@@ -37,8 +45,7 @@ class Buffalo {
     }
 
     public writeUInt16(value: number): void {
-        this.buffer.writeUInt16LE(value, this.position);
-        this.position += 2;
+        this.position = this.buffer.writeUInt16LE(value, this.position);
     }
 
     public readUInt16(): number {
@@ -48,8 +55,7 @@ class Buffalo {
     }
 
     public writeUInt24(value: number): void {
-        this.buffer.writeUIntLE(value, this.position, 3);
-        this.position += 3;
+        this.position = this.buffer.writeUIntLE(value, this.position, 3);
     }
 
     public readUInt24(): number {
@@ -59,8 +65,7 @@ class Buffalo {
     }
 
     public writeUInt32(value: number): void {
-        this.buffer.writeUInt32LE(value, this.position);
-        this.position += 4;
+        this.position = this.buffer.writeUInt32LE(value, this.position);
     }
 
     public readUInt32(): number {
@@ -70,8 +75,7 @@ class Buffalo {
     }
 
     public writeUInt40(value: number): void {
-        this.buffer.writeUIntLE(value, this.position, 5);
-        this.position += 5;
+        this.position = this.buffer.writeUIntLE(value, this.position, 5);
     }
 
     public readUInt40(): number {
@@ -81,8 +85,7 @@ class Buffalo {
     }
 
     public writeUInt48(value: number): void {
-        this.buffer.writeUIntLE(value, this.position, 6);
-        this.position += 6;
+        this.position = this.buffer.writeUIntLE(value, this.position, 6);
     }
 
     public readUInt48(): number {
@@ -92,9 +95,8 @@ class Buffalo {
     }
 
     public writeUInt56(value: bigint): void {
-        this.buffer.writeUIntLE(Number(value & 0xffffffffffffn), this.position, 6);
-        this.buffer.writeUInt8(Number(value >> 48n), this.position + 6);
-        this.position += 7;
+        this.position = this.buffer.writeUIntLE(Number(value & 0xffffffffffffn), this.position, 6);
+        this.position = this.buffer.writeUInt8(Number(value >> 48n), this.position);
     }
 
     public readUInt56(): bigint {
@@ -105,8 +107,7 @@ class Buffalo {
     }
 
     public writeUInt64(value: bigint): void {
-        this.buffer.writeBigUInt64LE(value, this.position);
-        this.position += 8;
+        this.position = this.buffer.writeBigUInt64LE(value, this.position);
     }
 
     public readUInt64(): bigint {
@@ -116,8 +117,7 @@ class Buffalo {
     }
 
     public writeInt8(value: number): void {
-        this.buffer.writeInt8(value, this.position);
-        this.position++;
+        this.position = this.buffer.writeInt8(value, this.position);
     }
 
     public readInt8(): number {
@@ -127,8 +127,7 @@ class Buffalo {
     }
 
     public writeInt16(value: number): void {
-        this.buffer.writeInt16LE(value, this.position);
-        this.position += 2;
+        this.position = this.buffer.writeInt16LE(value, this.position);
     }
 
     public readInt16(): number {
@@ -138,8 +137,7 @@ class Buffalo {
     }
 
     public writeInt24(value: number): void {
-        this.buffer.writeIntLE(value, this.position, 3);
-        this.position += 3;
+        this.position = this.buffer.writeIntLE(value, this.position, 3);
     }
 
     public readInt24(): number {
@@ -149,8 +147,7 @@ class Buffalo {
     }
 
     public writeInt32(value: number): void {
-        this.buffer.writeInt32LE(value, this.position);
-        this.position += 4;
+        this.position = this.buffer.writeInt32LE(value, this.position);
     }
 
     public readInt32(): number {
@@ -160,8 +157,7 @@ class Buffalo {
     }
 
     public writeInt40(value: number): void {
-        this.buffer.writeIntLE(value, this.position, 5);
-        this.position += 5;
+        this.position = this.buffer.writeIntLE(value, this.position, 5);
     }
 
     public readInt40(): number {
@@ -171,8 +167,7 @@ class Buffalo {
     }
 
     public writeInt48(value: number): void {
-        this.buffer.writeIntLE(value, this.position, 6);
-        this.position += 6;
+        this.position = this.buffer.writeIntLE(value, this.position, 6);
     }
 
     public readInt48(): number {
@@ -183,9 +178,8 @@ class Buffalo {
 
     public writeInt56(value: bigint): void {
         const unsignedValue = value < 0n ? (1n << 56n) + value : value;
-        this.buffer.writeUIntLE(Number(unsignedValue & 0xffffffffffffn), this.position, 6);
-        this.buffer.writeUInt8(Number(unsignedValue >> 48n), this.position + 6);
-        this.position += 7;
+        this.position = this.buffer.writeUIntLE(Number(unsignedValue & 0xffffffffffffn), this.position, 6);
+        this.position = this.buffer.writeUInt8(Number(unsignedValue >> 48n), this.position);
     }
 
     public readInt56(): bigint {
@@ -200,8 +194,7 @@ class Buffalo {
     }
 
     public writeInt64(value: bigint): void {
-        this.buffer.writeBigInt64LE(value, this.position);
-        this.position += 8;
+        this.position = this.buffer.writeBigInt64LE(value, this.position);
     }
 
     public readInt64(): bigint {
@@ -211,8 +204,7 @@ class Buffalo {
     }
 
     public writeFloatLE(value: number): void {
-        this.buffer.writeFloatLE(value, this.position);
-        this.position += 4;
+        this.position = this.buffer.writeFloatLE(value, this.position);
     }
 
     public readFloatLE(): number {
@@ -222,8 +214,7 @@ class Buffalo {
     }
 
     public writeDoubleLE(value: number): void {
-        this.buffer.writeDoubleLE(value, this.position);
-        this.position += 8;
+        this.position = this.buffer.writeDoubleLE(value, this.position);
     }
 
     public readDoubleLE(): number {
@@ -233,17 +224,21 @@ class Buffalo {
     }
 
     public writeIeeeAddr(value: string /*TODO: EUI64*/): void {
-        this.writeUInt32(parseInt(value.slice(10), 16));
-        this.writeUInt32(parseInt(value.slice(2, 10), 16));
+        this.writeUInt32(Number.parseInt(value.slice(10), 16));
+        this.writeUInt32(Number.parseInt(value.slice(2, 10), 16));
     }
 
-    public readIeeeAddr(): EUI64 {
-        return `0x${Buffer.from(this.readBuffer(8)).reverse().toString('hex')}`;
+    public readIeeeAddr(): Eui64 {
+        return ZSpecUtils.eui64LEBufferToHex(this.readBuffer(8));
     }
 
     public writeBuffer(values: Buffer | number[], length: number): void {
         if (values.length !== length) {
             throw new Error(`Length of values: '${values}' is not consitent with expected length '${length}'`);
+        }
+
+        if (values.length === 0) {
+            return;
         }
 
         if (!(values instanceof Buffer)) {
@@ -318,13 +313,21 @@ class Buffalo {
     }
 
     public writeUtf8String(value: string): void {
-        // value==='' is supported and is identified as "empty string"
-        this.position += this.buffer.write(value, this.position, 'utf8');
+        if (value === "") {
+            // identified as "empty string", no need to write anything
+            return;
+        }
+
+        this.position += this.buffer.write(value, this.position, "utf8");
     }
 
     public readUtf8String(length: number): string {
-        // length===0 is supported and is identified as "empty string"
-        const value = this.buffer.toString('utf8', this.position, this.position + length);
+        if (length === 0) {
+            // is identified as "empty string", no need to read anything
+            return "";
+        }
+
+        const value = this.buffer.toString("utf8", this.position, this.position + length);
         this.position += length;
         return value;
     }

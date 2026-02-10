@@ -1,6 +1,6 @@
-import {GP_ENDPOINT, GP_PROFILE_ID, HA_PROFILE_ID} from '../../../zspec/consts';
-import {Clusters} from '../../../zspec/zcl/definition/cluster';
-import {ClusterId, EmberMulticastId, ProfileId} from '../types';
+import {GP_ENDPOINT, GP_PROFILE_ID, HA_PROFILE_ID} from "../../../zspec/consts";
+import {Clusters} from "../../../zspec/zcl/definition/cluster";
+import type {ClusterId, EmberMulticastId, ProfileId} from "../types";
 
 type FixedEndpointInfo = {
     /** Actual Zigbee endpoint number. uint8_t */
@@ -58,7 +58,7 @@ export const FIXED_ENDPOINTS: readonly FixedEndpointInfo[] = [
             Clusters.msOccupancySensing.ID, // 0x0406,// Occupancy Sensing
             Clusters.ssIasZone.ID, // 0x0500,// IAS Zone
             Clusters.seMetering.ID, // 0x0702,// Simple Metering
-            Clusters.haMeterIdentification.ID, // 0x0B01,// Meter Identification
+            Clusters.seMeterIdentification.ID, // 0x0B01,// Meter Identification
             Clusters.haApplianceStatistics.ID, // 0x0B03,// Appliance Statistics
             Clusters.haElectricalMeasurement.ID, // 0x0B04,// Electrical Measurement
             Clusters.touchlink.ID, // 0x1000, // touchlink

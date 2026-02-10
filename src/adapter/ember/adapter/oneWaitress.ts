@@ -1,18 +1,18 @@
-/* istanbul ignore file */
+/* v8 ignore start */
 
-import equals from 'fast-deep-equal/es6';
+import equals from "fast-deep-equal/es6";
 
-import {TOUCHLINK_PROFILE_ID} from '../../../zspec/consts';
-import {EUI64, NodeId} from '../../../zspec/tstypes';
-import {ZclPayload} from '../../events';
-import {EmberApsFrame} from '../types';
+import {TOUCHLINK_PROFILE_ID} from "../../../zspec/consts";
+import type {Eui64, NodeId} from "../../../zspec/tstypes";
+import type {ZclPayload} from "../../events";
+import type {EmberApsFrame} from "../types";
 
 /** Events specific to OneWaitress usage. */
 export enum OneWaitressEvents {
-    STACK_STATUS_NETWORK_UP = 'STACK_STATUS_NETWORK_UP',
-    STACK_STATUS_NETWORK_DOWN = 'STACK_STATUS_NETWORK_DOWN',
-    STACK_STATUS_NETWORK_OPENED = 'STACK_STATUS_NETWORK_OPENED',
-    STACK_STATUS_NETWORK_CLOSED = 'STACK_STATUS_NETWORK_CLOSED',
+    STACK_STATUS_NETWORK_UP = "STACK_STATUS_NETWORK_UP",
+    STACK_STATUS_NETWORK_DOWN = "STACK_STATUS_NETWORK_DOWN",
+    STACK_STATUS_NETWORK_OPENED = "STACK_STATUS_NETWORK_OPENED",
+    STACK_STATUS_NETWORK_CLOSED = "STACK_STATUS_NETWORK_CLOSED",
 }
 
 type OneWaitressMatcher = {
@@ -21,7 +21,7 @@ type OneWaitressMatcher = {
      * EUI64 is currently only for NetworkAddress Request/Response
      * Except for InterPAN touchlink, it should always be present.
      */
-    target?: NodeId | EUI64;
+    target?: NodeId | Eui64;
     apsFrame: EmberApsFrame;
     /** Cluster ID for ZDO (because request !== response). */
     zdoResponseClusterId?: number;
@@ -54,10 +54,10 @@ interface Waiter<A, B> {
  * NOTE: `messageTag` is unreliable, so not used...
  */
 export class EmberOneWaitress {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: API
     private readonly waiters: Map<number, Waiter<OneWaitressMatcher, any>>;
     // NOTE: for now, this could be much simpler (array-like), but more complex events might come into play
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: API
     private readonly eventWaiters: Map<number, Waiter<OneWaitressEventMatcher, any>>;
     private currentId: number;
     private currentEventId: number;
@@ -113,7 +113,7 @@ export class EmberOneWaitress {
      * @param payload Payload to resolve
      * @returns True if resolved a waiter
      */
-    public resolveZDO(sender: NodeId | EUI64, apsFrame: EmberApsFrame, payload: unknown): boolean {
+    public resolveZDO(sender: NodeId | Eui64, apsFrame: EmberApsFrame, payload: unknown): boolean {
         for (const [index, waiter] of this.waiters.entries()) {
             if (waiter.timedout) {
                 this.waiters.delete(index);
@@ -156,11 +156,11 @@ export class EmberOneWaitress {
 
             // no target in touchlink, also no APS sequence, but use the ZCL one instead
             if (
-                (waiter.matcher.apsFrame.profileId === TOUCHLINK_PROFILE_ID || payload.address === waiter.matcher.target) &&
-                (!waiter.matcher.zclSequence || payload.header.transactionSequenceNumber === waiter.matcher.zclSequence) &&
-                (!waiter.matcher.commandIdentifier || payload.header.commandIdentifier === waiter.matcher.commandIdentifier) &&
-                payload.clusterID === waiter.matcher.apsFrame.clusterId &&
-                payload.endpoint === waiter.matcher.apsFrame.destinationEndpoint
+                (waiter.matcher.apsFrame.profileId === TOUCHLINK_PROFILE_ID ||
+                    (payload.address === waiter.matcher.target && payload.endpoint === waiter.matcher.apsFrame.destinationEndpoint)) &&
+                (waiter.matcher.zclSequence === undefined || payload.header.transactionSequenceNumber === waiter.matcher.zclSequence) &&
+                (waiter.matcher.commandIdentifier === undefined || payload.header.commandIdentifier === waiter.matcher.commandIdentifier) &&
+                payload.clusterID === waiter.matcher.apsFrame.clusterId
             ) {
                 clearTimeout(waiter.timer);
 
@@ -177,7 +177,8 @@ export class EmberOneWaitress {
     }
 
     public waitFor<T>(matcher: OneWaitressMatcher, timeout: number): {id: number; start: () => {promise: Promise<T>; id: number}} {
-        const id = this.currentId++;
+        this.currentId += 1;
+        const id = this.currentId;
         this.currentId &= 0xffff; // roll-over every so often - 65535 should be enough not to create conflicts ;-)
 
         const promise: Promise<T> = new Promise((resolve, reject): void => {
@@ -265,7 +266,8 @@ export class EmberOneWaitress {
         reason?: string,
     ): {id: number; start: () => {promise: Promise<T>; id: number}} {
         // NOTE: logic is very much the same as `waitFor`, just different matcher
-        const id = this.currentEventId++;
+        this.currentEventId += 1;
+        const id = this.currentEventId;
         this.currentEventId &= 0xffff; // roll-over every so often - 65535 should be enough not to create conflicts ;-)
 
         const promise: Promise<T> = new Promise((resolve, reject): void => {

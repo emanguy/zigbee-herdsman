@@ -1,28 +1,29 @@
-import fs from 'fs';
+import fs from "node:fs";
 
-import {logger} from '../utils/logger';
-import {DatabaseEntry, EntityType} from './tstype';
+import {logger} from "../utils/logger";
+import type {DatabaseEntry, EntityType} from "./tstype";
 
-const NS = 'zh:controller:database';
+const NS = "zh:controller:database";
 
-class Database {
+export class Database {
     private entries: {[id: number]: DatabaseEntry};
     private path: string;
     private maxId: number;
 
-    private constructor(entries: {[id: number]: DatabaseEntry}, path: string) {
+    private constructor(entries: {[id: number]: DatabaseEntry}, path: string, maxId: number) {
         this.entries = entries;
-        this.maxId = Math.max(...Object.keys(entries).map((t) => Number(t)), 0);
         this.path = path;
+        this.maxId = maxId;
     }
 
     public static open(path: string): Database {
         const entries: {[id: number]: DatabaseEntry} = {};
+        let maxId = 0;
 
         if (fs.existsSync(path)) {
-            const file = fs.readFileSync(path, 'utf-8');
+            const file = fs.readFileSync(path, "utf-8");
 
-            for (const row of file.split('\n')) {
+            for (const row of file.split("\n")) {
                 if (!row) {
                     continue;
                 }
@@ -30,8 +31,12 @@ class Database {
                 try {
                     const json = JSON.parse(row);
 
-                    if (json.id != undefined) {
+                    if (Number.isFinite(json.id)) {
                         entries[json.id] = json;
+
+                        if (json.id > maxId) {
+                            maxId = json.id;
+                        }
                     }
                 } catch (error) {
                     logger.error(`Corrupted database line, ignoring. ${error}`, NS);
@@ -39,7 +44,7 @@ class Database {
             }
         }
 
-        return new Database(entries, path);
+        return new Database(entries, path, maxId);
     }
 
     public *getEntriesIterator(type: EntityType[]): Generator<DatabaseEntry> {
@@ -93,17 +98,17 @@ class Database {
 
     public write(): void {
         logger.debug(`Writing database to '${this.path}'`, NS);
-        let lines = '';
+        let lines = "";
 
         for (const id in this.entries) {
-            lines += JSON.stringify(this.entries[id]) + `\n`;
+            lines += `${JSON.stringify(this.entries[id])}\n`;
         }
 
-        const tmpPath = this.path + '.tmp';
+        const tmpPath = `${this.path}.tmp`;
 
         try {
             // If there already exsits a database.db.tmp, rename it to database.db.tmp.<now>
-            const dateTmpPath = tmpPath + '.' + new Date().toISOString().replaceAll(':', '-');
+            const dateTmpPath = `${tmpPath}.${new Date().toISOString().replaceAll(":", "-")}`;
             fs.renameSync(tmpPath, dateTmpPath);
 
             // If we got this far, we succeeded! Warn the user about this
@@ -112,7 +117,7 @@ class Database {
             // Nothing to catch; if the renameSync fails, we ignore that exception
         }
 
-        const fd = fs.openSync(tmpPath, 'w');
+        const fd = fs.openSync(tmpPath, "w");
         fs.writeFileSync(fd, lines.slice(0, -1)); // remove last newline, no effect if empty string
         // Ensure file is on disk https://github.com/Koenkk/zigbee2mqtt/issues/11759
         fs.fsyncSync(fd);

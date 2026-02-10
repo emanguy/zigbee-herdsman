@@ -1,15 +1,15 @@
-import events from 'events';
+import events from "node:events";
 
-import {Adapter} from '../../adapter';
-import Database from '../database';
+import type {Adapter} from "../../adapter";
+import type Database from "../database";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: API
 type EventMap<T> = Record<keyof T, any[]> | DefaultEventMap;
 type DefaultEventMap = [never];
 
-abstract class Entity<T extends EventMap<T> = DefaultEventMap> extends events.EventEmitter<T> {
-    protected static database?: Database;
-    protected static adapter?: Adapter;
+export abstract class Entity<T extends EventMap<T> = DefaultEventMap> extends events.EventEmitter<T> {
+    protected static database: Database;
+    protected static adapter: Adapter;
 
     public static injectDatabase(database: Database): void {
         Entity.database = database;

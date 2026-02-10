@@ -60,6 +60,8 @@ export const APS_ENCRYPTION_OVERHEAD = 9;
 /** The additional overhead required for APS fragmentation. */
 export const APS_FRAGMENTATION_OVERHEAD = 2;
 
+/** An inactive concentrator. */
+export const EMBER_INACTIVE_CONCENTRATOR = 0xffff;
 /**
  * A concentrator with insufficient memory to store source routes for the entire network.
  * Route records are sent to the concentrator prior to every inbound APS unicast.
@@ -76,23 +78,6 @@ export const EMBER_HIGH_RAM_CONCENTRATOR = 0xfff9;
 
 /** The short address of the trust center. This address never changes dynamically. */
 export const EMBER_TRUST_CENTER_NODE_ID = 0x0000;
-
-/** The size of the CRC that is appended to an installation code. */
-export const EMBER_INSTALL_CODE_CRC_SIZE = 2;
-
-/** The number of sizes of acceptable installation codes used in Certificate Based Key Establishment (CBKE). */
-export const EMBER_NUM_INSTALL_CODE_SIZES = 4;
-
-/**
- * Various sizes of valid installation codes that are stored in the manufacturing tokens.
- * Note that each size includes 2 bytes of CRC appended to the end of the installation code.
- */
-export const EMBER_INSTALL_CODE_SIZES = [
-    6 + EMBER_INSTALL_CODE_CRC_SIZE,
-    8 + EMBER_INSTALL_CODE_CRC_SIZE,
-    12 + EMBER_INSTALL_CODE_CRC_SIZE,
-    16 + EMBER_INSTALL_CODE_CRC_SIZE,
-];
 
 /**
  * Default value for context's PSA algorithm permission (CCM* with 4 byte tag).

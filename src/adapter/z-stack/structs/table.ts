@@ -1,9 +1,9 @@
-import assert from 'assert';
+import assert from "node:assert";
 
-import {SerializableMemoryObject} from './serializable-memory-object';
-import {BuiltStruct, StructFactorySignature, StructMemoryAlignment} from './struct';
+import type {SerializableMemoryObject} from "./serializable-memory-object";
+import type {BuiltStruct, StructFactorySignature, StructMemoryAlignment} from "./struct";
 
-type TableBuildOmitKeys = 'struct' | 'header' | 'occupancy' | 'load' | 'build' | 'inlineHeader';
+type TableBuildOmitKeys = "struct" | "header" | "occupancy" | "load" | "build" | "inlineHeader";
 export type BuiltTable<R extends BuiltStruct, T = Table<R>> = Omit<T, TableBuildOmitKeys>;
 export type TableFactorySignature<R extends BuiltStruct, T = Table<R>> = (data?: Buffer) => T;
 
@@ -47,7 +47,7 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
      * Returns all used entries.
      */
     public get used(): R[] {
-        assert(this.entryOccupancyFunction, 'Table usage cannot be determined without occupancy function when header is not present.');
+        assert(this.entryOccupancyFunction, "Table usage cannot be determined without occupancy function when header is not present.");
         const fun = this.entryOccupancyFunction;
         return this.entries.filter((e) => fun(e));
     }
@@ -56,7 +56,7 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
      * Returns all unused entries.
      */
     public get free(): R[] {
-        assert(this.entryOccupancyFunction, 'Table usage cannot be determined without occupancy function when header is not present.');
+        assert(this.entryOccupancyFunction, "Table usage cannot be determined without occupancy function when header is not present.");
         const fun = this.entryOccupancyFunction;
         return this.entries.filter((e) => !fun(e));
     }
@@ -65,7 +65,6 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
      * Return number of records marked as free.
      */
     public get freeCount(): number {
-        /* istanbul ignore next */
         return this.free.length;
     }
 
@@ -89,8 +88,7 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
      * @param entry Entry to resolve index for.
      */
     public indexOf(entry: R): number | null {
-        /* istanbul ignore next */
-        return this.entries.findIndex((e) => e.serialize().equals(entry.serialize())) ?? null;
+        return this.entries.findIndex((e) => e.serialize().equals(entry.serialize())) ?? /* v8 ignore next */ null;
     }
 
     /**
@@ -98,7 +96,7 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
      *
      * @param alignment Memory alignment to use for export.
      */
-    public serialize(alignment: StructMemoryAlignment = 'unaligned'): Buffer {
+    public serialize(alignment: StructMemoryAlignment = "unaligned"): Buffer {
         const entryLength = this.emptyEntry.getLength(alignment);
         const output = Buffer.alloc((this.hasInlineLengthHeader ? 2 : 0) + this.capacity * entryLength, 0x00);
         let offset = 0;
@@ -106,10 +104,10 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
             output.writeUInt16LE(this.usedCount);
             offset += 2;
         }
-        this.data.forEach((e) => {
+        for (const e of this.data) {
             output.set(e.serialize(alignment), offset);
             offset += e.getLength(alignment);
-        });
+        }
         return output;
     }
 
@@ -160,16 +158,17 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
      */
     public build(capacity: number): BuiltTable<R>;
 
-    public build(dataOrCapacity: Buffer | Buffer[] | number, alignment: StructMemoryAlignment = 'unaligned'): BuiltTable<R> {
-        /* istanbul ignore next */
+    public build(dataOrCapacity: Buffer | Buffer[] | number, alignment: StructMemoryAlignment = "unaligned"): BuiltTable<R> {
+        /* v8 ignore start */
         if (!this.entryStructFactory) {
-            throw new Error('Table requires an entry struct factory.');
+            throw new Error("Table requires an entry struct factory.");
         }
+        /* v8 ignore stop */
         if (Array.isArray(dataOrCapacity) && dataOrCapacity.every((e) => Buffer.isBuffer(e))) {
             /* create table from given entries */
             const data = dataOrCapacity;
             if (!data.every((e) => e.length === data[0].length)) {
-                throw new Error('All table entries need to be the same length');
+                throw new Error("All table entries need to be the same length");
             }
             this.data = data.map((buffer) => this.entryStructFactory(buffer));
         } else if (Buffer.isBuffer(dataOrCapacity)) {
@@ -187,12 +186,12 @@ export class Table<R extends BuiltStruct> implements SerializableMemoryObject {
             this.data = [...Array(capacity)].map((_, i) =>
                 this.entryStructFactory(entriesStart.slice(i * entryLength, i * entryLength + entryLength)),
             );
-        } else if (typeof dataOrCapacity === 'number') {
+        } else if (typeof dataOrCapacity === "number") {
             /* create empty table of given capacity */
             const capacity = dataOrCapacity;
             this.data = [...Array(capacity)].map(() => this.entryStructFactory());
         } else {
-            throw new Error('Unsupported table data source');
+            throw new Error("Unsupported table data source");
         }
         return this;
     }
